@@ -29,12 +29,12 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: var(--bg-main); color: var(--text-main); padding: 16px 12px; display: flex; justify-content: center; }
     .container { width: 100%; max-width: 940px; display: flex; flex-direction: column; gap: 16px; }
-    
-    .header { 
-      background: var(--bg-card); 
-      border: 1px solid var(--border-color); 
-      border-radius: 12px; 
-      padding: 16px 20px; 
+
+    .header {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -93,12 +93,12 @@
     .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px; }
 
     .control-group-top { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
-    .control-group-options { 
-      display: grid; 
-      grid-template-columns: repeat(3, 1fr); 
-      gap: 12px; 
-      padding-top: 14px; 
-      border-top: 1px solid var(--border-color); 
+    .control-group-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-color);
     }
     @media (max-width: 760px) {
       .header { flex-direction: column; align-items: flex-start; }
@@ -145,15 +145,15 @@
     .section-title { font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     .items-list { display: flex; flex-direction: column; gap: 10px; }
 
-    .item-row { 
-      background: var(--bg-card-secondary); 
-      border: 1px solid var(--border-color); 
-      border-radius: 10px; 
-      padding: 12px 16px; 
-      display: flex; 
-      align-items: center; 
-      justify-content: space-between; 
-      gap: 16px; 
+    .item-row {
+      background: var(--bg-card-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
       transition: border-color 0.2s, background 0.2s;
     }
     .item-row.selectable {
@@ -162,9 +162,9 @@
     .item-row.selectable:hover {
       border-color: rgba(6, 182, 212, 0.4);
     }
-    .item-row.selected { 
-      border-color: var(--accent-cyan); 
-      background: #141c2a; 
+    .item-row.selected {
+      border-color: var(--accent-cyan);
+      background: #141c2a;
     }
 
     .item-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
@@ -187,6 +187,27 @@
 
     .market-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: #17212e; color: #66c0f4; border: 1px solid #2a475e; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
     .market-link-btn:hover { background: #2a475e; color: #fff; }
+
+    .craft-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 10px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-green);
+      border: 1px solid var(--accent-green);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .craft-link-btn:hover {
+      background: var(--accent-green);
+      color: #0b0e14;
+    }
+
     .select-btn { padding: 7px 12px; background: #232c3d; color: #fff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
     .select-btn.active { background: var(--accent-cyan); color: #0b0e14; border-color: var(--accent-cyan); }
 
@@ -220,6 +241,16 @@
       background: rgba(239, 68, 68, 0.15);
       border-color: var(--accent-red);
       color: var(--accent-red);
+    }
+
+    .notice-card {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--accent-red);
+      color: #fca5a5;
+      padding: 16px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -293,6 +324,9 @@
   </div>
 
   <div id="resultSection" class="result-section">
+    <!-- Notice box for uncraftable base items -->
+    <div id="uncraftableNotice" class="notice-card" style="display: none;"></div>
+
     <div class="collection-breakdown-box">
       <div class="collection-breakdown-title">Collections in Trade-Up</div>
       <div id="collectionsListText"></div>
@@ -341,15 +375,15 @@
       <span id="statAvgFloat" class="stat-value green" style="font-size: 14px;">0.0000</span>
     </div>
 
-    <div>
+    <div id="eligibleContainer">
       <div class="section-title">
         <span>Eligible Input Skins (Select 1 to Buy x10)</span>
-        <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click any skin or button to switch</span>
+        <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click card to select &bull; Open trade-up in new tab with Trade-Up ↗</span>
       </div>
       <div id="eligibleList" class="items-list"></div>
     </div>
 
-    <div>
+    <div id="recipeContainer">
       <div class="section-title">
         <span>Trade-Up Input Items (Total: 10 Items)</span>
         <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Switch skin via dropdown or configure split items</span>
@@ -357,7 +391,7 @@
       <div id="recipeInputsList" class="items-list"></div>
     </div>
 
-    <div>
+    <div id="outcomesContainer">
       <div class="section-title">
         <span>All Possible Outcomes from Active Collections</span>
         <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Individual outcome Net P/L after market fee</span>
@@ -411,13 +445,13 @@ function goHome() {
   secondaryCount = 0;
   secondarySkin = null;
   isStatTrak = false;
-  
+
   const stBtn = document.getElementById("stToggle");
   if (stBtn) stBtn.classList.remove("active");
 
   const inputEl = document.getElementById("skinInput");
   if (inputEl) inputEl.value = "";
-  
+
   const wearEl = document.getElementById("wearSelect");
   if (wearEl) wearEl.value = "0.38";
 
@@ -480,30 +514,76 @@ async function loadSkins() {
     "https://cdn.jsdelivr.net/gh/ByMyKel/CSGO-API@main/public/api/en/skins.json"
   ];
 
-  for (const url of endpoints) {
+  const statusEl = document.getElementById("status");
+  const timeoutMs = 10000;
+
+  if (statusEl) statusEl.textContent = "Connecting to skin database...";
+
+  const fetchMirror = async (url) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          allSkins = data;
-          validTargetSkins = data.filter(s => 
-            s.rarity &&
-            ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) &&
-            s.collections && s.collections.length > 0 &&
-            s.min_float !== null && s.max_float !== null
-          );
-          const priceCount = Object.keys(priceCache).length;
-          document.getElementById("status").textContent = `Ready: ${validTargetSkins.length} skins & ${priceCount.toLocaleString()} prices loaded.`;
-          checkUrlHashLoad();
-          return;
-        }
+      const response = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: { "Accept": "application/json" }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
-    } catch (e) {
-      console.warn("Failed endpoint:", url);
+
+      const data = await response.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("Invalid or empty skin database");
+      }
+
+      return { url, data };
+    } finally {
+      clearTimeout(timer);
     }
+  };
+
+  try {
+    const result = await Promise.any(endpoints.map(fetchMirror));
+    const data = result.data;
+
+    allSkins = data;
+    validTargetSkins = data.filter(s =>
+      s &&
+      s.rarity &&
+      ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) &&
+      Array.isArray(s.collections) &&
+      s.collections.length > 0 &&
+      s.min_float !== null && s.min_float !== undefined &&
+      s.max_float !== null && s.max_float !== undefined
+    );
+
+    if (validTargetSkins.length === 0) {
+      throw new Error("Database loaded but contained no valid trade-up skins");
+    }
+
+    const priceCount = Object.keys(priceCache || {}).length;
+    if (statusEl) {
+      statusEl.textContent = `Ready: ${validTargetSkins.length} skins & ${priceCount.toLocaleString()} prices loaded.`;
+      statusEl.title = `Database source: ${result.url}`;
+    }
+
+    checkUrlHashLoad();
+  } catch (error) {
+    console.error("Unable to load CS2 skin database from any mirror:", error);
+    if (statusEl) {
+      statusEl.textContent = "Failed to load skin database. Retrying...";
+      statusEl.title = "All skin database mirrors failed or timed out.";
+    }
+
+    setTimeout(() => {
+      if (allSkins.length === 0) loadSkins();
+    }, 3000);
   }
-  document.getElementById("status").textContent = "Failed to load database. Check network connection.";
 }
 
 loadSkins();
@@ -627,15 +707,46 @@ function runCalculation() {
   if (!selectedTarget) return;
 
   const resSection = document.getElementById("resultSection");
+  const noticeBox = document.getElementById("uncraftableNotice");
   const currentTierIndex = TIER_ORDER.indexOf(targetRarity(selectedTarget));
+
   if (currentTierIndex <= 0) {
     resSection.style.display = "none";
     return;
   }
 
   const inputTier = TIER_ORDER[currentTierIndex - 1];
-  const targetNormalized = getNormalizedTarget();
 
+  // If no lower-tier inputs exist in this collection (e.g. Mil-Spec skin from a case)
+  if (!targetCollInputs || targetCollInputs.length === 0) {
+    resSection.style.display = "flex";
+    noticeBox.style.display = "block";
+    noticeBox.innerHTML = `
+      <b>Trade-Up Not Possible:</b> <strong>${selectedTarget.name}</strong> is a <strong>${targetRarity(selectedTarget)}</strong> skin from <em>${selectedTarget.collections[0]?.name || 'this collection'}</em>. 
+      Case collections do not contain any <em>${inputTier}</em> skins, so this item cannot be crafted via Trade-Up contracts.
+    `;
+    document.getElementById("eligibleContainer").style.display = "none";
+    document.getElementById("recipeContainer").style.display = "none";
+    document.getElementById("outcomesContainer").style.display = "none";
+    document.getElementById("collectionsListText").innerHTML = `&bull; ${selectedTarget.collections[0]?.name || 'None'} (No eligible lower-tier items)`;
+    document.getElementById("statInputCost").textContent = "N/A";
+    document.getElementById("statEV").textContent = "N/A";
+    document.getElementById("statProfit").textContent = "N/A";
+    document.getElementById("statProfitability").textContent = "N/A";
+    document.getElementById("statBestHit").textContent = "N/A";
+    document.getElementById("statWorstHit").textContent = "N/A";
+    document.getElementById("statOdds").textContent = "0.0%";
+    document.getElementById("statVerdict").textContent = "UNCRAFTABLE";
+    document.getElementById("statVerdict").className = "stat-value red";
+    return;
+  }
+
+  noticeBox.style.display = "none";
+  document.getElementById("eligibleContainer").style.display = "block";
+  document.getElementById("recipeContainer").style.display = "block";
+  document.getElementById("outcomesContainer").style.display = "block";
+
+  const targetNormalized = getNormalizedTarget();
   const primarySkin = targetCollInputs[selectedPrimaryIndex];
   if (primarySkin) {
     const inMin = primarySkin.min_float ?? 0.00;
@@ -655,6 +766,20 @@ function renderEligibleInputs(inputTier, targetNormalized) {
   const container = document.getElementById("eligibleList");
   container.innerHTML = "";
   const cur = getActiveCurrency();
+  const feeVal = document.getElementById("feeSelect") ? document.getElementById("feeSelect").value : "0.8696";
+  const curCode = document.getElementById("currencySelect") ? document.getElementById("currencySelect").value : "INR";
+
+  const wearMap = {
+    "Factory New": "0.07",
+    "Minimal Wear": "0.15",
+    "Field-Tested": "0.38",
+    "Well-Worn": "0.45",
+    "Battle-Scarred": "1.00"
+  };
+
+  const rarityColor = RARITY_COLORS[inputTier] || "var(--accent-cyan)";
+  const lowerTierIndex = TIER_ORDER.indexOf(inputTier) - 1;
+  const lowerTierName = lowerTierIndex >= 0 ? TIER_ORDER[lowerTierIndex] : null;
 
   targetCollInputs.forEach((skin, index) => {
     const inMin = skin.min_float ?? 0.00;
@@ -669,12 +794,21 @@ function renderEligibleInputs(inputTier, targetNormalized) {
       priceDisplay = (priceValUSD * cur.rate).toFixed(2);
     }
 
+    // Only show "Trade-Up ↗" if this skin's collection actually contains skins from the tier below it
+    const skinCollName = skin.collections[0]?.name;
+    const canCraftThisSkin = lowerTierName && allSkins.some(s => 
+      s.collections && s.collections.some(c => c.name === skinCollName) &&
+      s.rarity && s.rarity.name === lowerTierName
+    );
+
+    const craftWearVal = wearMap[neededWear] || "0.38";
+    const craftHash = `#target=${encodeURIComponent(skin.name)}&wear=${craftWearVal}&st=${isStatTrak ? "1" : "0"}&fee=${feeVal}&cur=${curCode}`;
+
     const isSelected = index === selectedPrimaryIndex;
     const row = document.createElement("div");
     row.className = `item-row selectable ${isSelected ? "selected" : ""}`;
     row.id = `eligible-row-${index}`;
 
-    // Clicking anywhere on this card selects it
     row.onclick = (e) => {
       if (e.target.closest("a") || e.target.closest("input")) return;
       selectEligiblePrimary(index);
@@ -682,11 +816,12 @@ function renderEligibleInputs(inputTier, targetNormalized) {
 
     row.innerHTML = `
       <div class="item-left">
-        <div class="rarity-pill" style="background-color: ${RARITY_COLORS[inputTier] || '#fff'}"></div>
+        <div class="rarity-pill" style="background-color: ${rarityColor}"></div>
         <img class="item-thumb" src="${skin.image || ''}" alt="" onerror="this.style.display='none'">
         <div class="item-details">
           <div class="item-name">
             ${skin.name}
+            <span class="badge" style="background: rgba(255,255,255,0.06); color: ${rarityColor}; border: 1px solid ${rarityColor};">${inputTier}</span>
             ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}
           </div>
           <div class="item-source">${getSourceInfo(skin)}</div>
@@ -694,6 +829,11 @@ function renderEligibleInputs(inputTier, targetNormalized) {
         </div>
       </div>
       <div class="item-right">
+        ${canCraftThisSkin ? `
+          <a href="${craftHash}" target="_blank" class="craft-link-btn" title="View trade-up to craft this skin in a new tab" onclick="event.stopPropagation();">
+            Trade-Up ↗
+          </a>
+        ` : ''}
         <a href="${getSteamMarketUrl(hashName)}" target="_blank" class="market-link-btn" title="View floor price on Steam Market">
           Steam Market ↗
         </a>
@@ -753,6 +893,8 @@ function renderRecipeInputs(inputTier) {
     s.min_float !== null && s.max_float !== null
   );
 
+  const primaryRarityColor = RARITY_COLORS[inputTier] || "var(--accent-cyan)";
+
   const row1 = document.createElement("div");
   row1.className = "item-row selected";
 
@@ -766,13 +908,14 @@ function renderRecipeInputs(inputTier) {
 
   row1.innerHTML = `
     <div class="item-left">
-      <div class="rarity-pill" style="background-color: ${RARITY_COLORS[inputTier] || '#fff'}"></div>
+      <div class="rarity-pill" style="background-color: ${primaryRarityColor}"></div>
       <img class="item-thumb" src="${primarySkin.image || ''}" alt="" onerror="this.style.display='none'">
       <div class="item-details">
         <div class="item-name">
           <select style="padding: 4px 8px; font-weight: 700; width: auto; max-width: 280px;" onchange="selectEligiblePrimary(parseInt(this.value))">
             ${primaryDropdownHtml}
           </select>
+          <span class="badge" style="background: rgba(255,255,255,0.06); color: ${primaryRarityColor}; border: 1px solid ${primaryRarityColor};">${inputTier}</span>
           <span class="badge badge-best">Primary</span>
           ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}
         </div>
@@ -828,13 +971,14 @@ function renderRecipeInputs(inputTier) {
 
     row2.innerHTML = `
       <div class="item-left">
-        <div class="rarity-pill" style="background-color: ${RARITY_COLORS[inputTier] || '#fff'}"></div>
+        <div class="rarity-pill" style="background-color: ${primaryRarityColor}"></div>
         <img class="item-thumb" src="${secondarySkin.image || ''}" alt="" onerror="this.style.display='none'">
         <div class="item-details">
           <div class="item-name">
             <select style="padding: 4px 8px; font-weight: 700; width: auto; max-width: 280px;" onchange="onSecondarySkinChange(this.value)">
               ${secondaryDropdownHtml}
             </select>
+            <span class="badge" style="background: rgba(255,255,255,0.06); color: ${primaryRarityColor}; border: 1px solid ${primaryRarityColor};">${inputTier}</span>
             <span class="badge badge-secondary">Filler / Secondary</span>
             ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}
           </div>
@@ -938,13 +1082,13 @@ function computeAndRenderOutcomes(inputTier) {
 
   const pMin = primarySkin.min_float ?? 0.00;
   const pMax = primarySkin.max_float ?? 1.00;
-  const pWeighted = pMax === pMin ? 0 : (primaryFloat - pMin) / (pMax - pMin);
+  const pWeighted = pMax !== pMin ? (primaryFloat - pMin) / (pMax - pMin) : 0;
 
   let sWeighted = 0;
   if (primaryCount < 10 && secondarySkin) {
     const sMin = secondarySkin.min_float ?? 0.00;
     const sMax = secondarySkin.max_float ?? 1.00;
-    sWeighted = sMax === sMin ? 0 : (secondaryFloat - sMin) / (sMax - sMin);
+    sWeighted = sMax !== sMin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
   }
 
   const avgWeightedFloat = ((primaryCount * pWeighted) + (secondaryCount * sWeighted)) / 10;
@@ -991,10 +1135,10 @@ function renderOutcomeCards(avgWeightedFloat) {
     if (!primarySkin) return;
     const pMin = primarySkin.min_float ?? 0.00;
     const pMax = primarySkin.max_float ?? 1.00;
-    const pWeighted = (primaryFloat - pMin) / (pMax - pMin);
+    const pWeighted = pMax !== pMin ? (primaryFloat - pMin) / (pMax - pMin) : 0;
     const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
     const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-    const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
+    const sWeighted = secondarySkin && sMax !== sMin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
     avgWeightedFloat = ((primaryCount * pWeighted) + (secondaryCount * sWeighted)) / 10;
   }
 
@@ -1003,6 +1147,7 @@ function renderOutcomeCards(avgWeightedFloat) {
   const cur = getActiveCurrency();
   const targetTier = targetRarity(selectedTarget);
   const targetWearLimit = parseFloat(document.getElementById("wearSelect").value);
+  const rarityColor = RARITY_COLORS[targetTier] || "var(--accent-cyan)";
 
   let targetSkinOdds = 0;
 
@@ -1028,11 +1173,12 @@ function renderOutcomeCards(avgWeightedFloat) {
     row.className = "item-row";
     row.innerHTML = `
       <div class="item-left">
-        <div class="rarity-pill" style="background-color: ${RARITY_COLORS[targetTier] || '#fff'}"></div>
+        <div class="rarity-pill" style="background-color: ${rarityColor}"></div>
         <img class="item-thumb" src="${skin.image || ''}" alt="" onerror="this.style.display='none'">
         <div class="item-details">
           <div class="item-name">
-            ${skin.name} 
+            ${skin.name}
+            <span class="badge" style="background: rgba(255,255,255,0.06); color: ${rarityColor}; border: 1px solid ${rarityColor};">${targetTier}</span>
             ${isTargetSkin ? '<span class="badge badge-best">Target</span>' : ''}
             ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}
           </div>
@@ -1067,14 +1213,14 @@ function onOutcomePriceChange(index, val) {
   const entry = activeOutcomes[index];
   const oMin = entry.skin.min_float ?? 0.00;
   const oMax = entry.skin.max_float ?? 1.00;
-  
+
   const primarySkin = targetCollInputs[selectedPrimaryIndex];
   const pMin = primarySkin.min_float ?? 0.00;
   const pMax = primarySkin.max_float ?? 1.00;
-  const pWeighted = (primaryFloat - pMin) / (pMax - pMin);
+  const pWeighted = pMax !== pMin ? (primaryFloat - pMin) / (pMax - pMin) : 0;
   const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
   const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-  const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
+  const sWeighted = secondarySkin && sMax !== sMin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
   const avgW = ((primaryCount * pWeighted) + (secondaryCount * sWeighted)) / 10;
   const outFloat = (avgW * (oMax - oMin)) + oMin;
   const wear = getWearName(outFloat);
