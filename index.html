@@ -187,28 +187,6 @@
 
     .market-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: #17212e; color: #66c0f4; border: 1px solid #2a475e; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
     .market-link-btn:hover { background: #2a475e; color: #fff; }
-
-    /* Trade-Up Navigation Button */
-    .craft-link-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 7px 10px;
-      background: rgba(16, 185, 129, 0.12);
-      color: var(--accent-green);
-      border: 1px solid var(--accent-green);
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-    .craft-link-btn:hover {
-      background: var(--accent-green);
-      color: #0b0e14;
-    }
-
     .select-btn { padding: 7px 12px; background: #232c3d; color: #fff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
     .select-btn.active { background: var(--accent-cyan); color: #0b0e14; border-color: var(--accent-cyan); }
 
@@ -366,7 +344,7 @@
     <div>
       <div class="section-title">
         <span>Eligible Input Skins (Select 1 to Buy x10)</span>
-        <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click skin to select &bull; Click "Trade-Up ↗" to craft this skin in a new tab</span>
+        <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click any skin or button to switch</span>
       </div>
       <div id="eligibleList" class="items-list"></div>
     </div>
@@ -677,19 +655,6 @@ function renderEligibleInputs(inputTier, targetNormalized) {
   const container = document.getElementById("eligibleList");
   container.innerHTML = "";
   const cur = getActiveCurrency();
-  const feeVal = document.getElementById("feeSelect").value;
-  const curCode = document.getElementById("currencySelect").value;
-  const baseUrl = window.location.href.split('#')[0];
-
-  const wearFloatMap = {
-    "Factory New": "0.07",
-    "Minimal Wear": "0.15",
-    "Field-Tested": "0.38",
-    "Well-Worn": "0.45",
-    "Battle-Scarred": "1.00"
-  };
-
-  const canCraft = inputTier !== "Consumer Grade";
 
   targetCollInputs.forEach((skin, index) => {
     const inMin = skin.min_float ?? 0.00;
@@ -703,9 +668,6 @@ function renderEligibleInputs(inputTier, targetNormalized) {
     if (priceValUSD !== undefined && priceValUSD !== null) {
       priceDisplay = (priceValUSD * cur.rate).toFixed(2);
     }
-
-    const craftWearVal = wearFloatMap[neededWear] || "0.38";
-    const craftUrl = `${baseUrl}#target=${encodeURIComponent(skin.name)}&wear=${craftWearVal}&st=${isStatTrak ? "1" : "0"}&fee=${feeVal}&cur=${curCode}`;
 
     const isSelected = index === selectedPrimaryIndex;
     const row = document.createElement("div");
@@ -732,11 +694,6 @@ function renderEligibleInputs(inputTier, targetNormalized) {
         </div>
       </div>
       <div class="item-right">
-        ${canCraft ? `
-          <a href="${craftUrl}" target="_blank" class="craft-link-btn" title="View trade-up to craft this skin in a new tab" onclick="event.stopPropagation();">
-            Trade-Up ↗
-          </a>
-        ` : ''}
         <a href="${getSteamMarketUrl(hashName)}" target="_blank" class="market-link-btn" title="View floor price on Steam Market">
           Steam Market ↗
         </a>
@@ -1037,7 +994,7 @@ function renderOutcomeCards(avgWeightedFloat) {
     const pWeighted = (primaryFloat - pMin) / (pMax - pMin);
     const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
     const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-    const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin);
+    const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
     avgWeightedFloat = ((primaryCount * pWeighted) + (secondaryCount * sWeighted)) / 10;
   }
 
@@ -1117,7 +1074,7 @@ function onOutcomePriceChange(index, val) {
   const pWeighted = (primaryFloat - pMin) / (pMax - pMin);
   const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
   const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-  const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin);
+  const sWeighted = secondarySkin ? (secondaryFloat - sMin) / (sMax - sMin) : 0;
   const avgW = ((primaryCount * pWeighted) + (secondaryCount * sWeighted)) / 10;
   const outFloat = (avgW * (oMax - oMin)) + oMin;
   const wear = getWearName(outFloat);
