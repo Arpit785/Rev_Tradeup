@@ -29,10 +29,44 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: var(--bg-main); color: var(--text-main); padding: 16px 12px; display: flex; justify-content: center; }
     .container { width: 100%; max-width: 940px; display: flex; flex-direction: column; gap: 16px; }
-    .header { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 20px; }
+    
+    .header { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border-color); 
+      border-radius: 12px; 
+      padding: 16px 20px; 
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .header-content { display: flex; flex-direction: column; }
     .header-tag { font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; color: var(--accent-cyan); }
     .header-title { font-size: 20px; font-weight: 700; color: #fff; margin-top: 2px; }
     .status-badge { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    .home-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-card-secondary);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .home-btn:hover {
+      border-color: var(--accent-cyan);
+      background: #141c2a;
+      color: var(--accent-cyan);
+    }
+
     .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px; }
 
     .control-group-top { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -114,7 +148,6 @@
     .condition-pill.match { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
     .condition-pill.miss { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
 
-    /* Individual Outcome Net Profit / Loss Badge */
     .pnl-badge {
       font-size: 12px;
       font-weight: 700;
@@ -143,9 +176,14 @@
 
 <div class="container">
   <div class="header">
-    <div class="header-tag">Reverse Trade-Up Engine & Analytics</div>
-    <div class="header-title">CS2 Trade-Up & Multi-Input Profit Calculator</div>
-    <div id="status" class="status-badge">Connecting to skin database...</div>
+    <div class="header-content">
+      <div class="header-tag">Reverse Trade-Up Engine & Analytics</div>
+      <div class="header-title">CS2 Trade-Up & Multi-Input Profit Calculator</div>
+      <div id="status" class="status-badge">Connecting to skin database...</div>
+    </div>
+    <button class="home-btn" onclick="goHome()" title="Reset calculator to home screen">
+      <span>🏠 Home</span>
+    </button>
   </div>
 
   <div class="card">
@@ -206,13 +244,11 @@
   </div>
 
   <div id="resultSection" class="result-section">
-    <!-- Active Collections Overview -->
     <div class="collection-breakdown-box">
       <div class="collection-breakdown-title">Collections in Trade-Up</div>
       <div id="collectionsListText"></div>
     </div>
 
-    <!-- Row 1: Primary Financial Stats -->
     <div class="financial-grid">
       <div class="stat-box">
         <span class="stat-label">Total Input Cost</span>
@@ -232,7 +268,6 @@
       </div>
     </div>
 
-    <!-- Row 2: Risk Variance & Trade Details -->
     <div class="financial-grid">
       <div class="stat-box">
         <span class="stat-label">Best Outcome Hit</span>
@@ -252,13 +287,11 @@
       </div>
     </div>
 
-    <!-- Float Bounds Reference -->
     <div class="stat-box" style="margin-top: -6px;">
       <span class="stat-label">Avg Input Float (Weighted)</span>
       <span id="statAvgFloat" class="stat-value green" style="font-size: 14px;">0.0000</span>
     </div>
 
-    <!-- SECTION 1: Pure 10x Eligible Collection Inputs -->
     <div>
       <div class="section-title">
         <span>Eligible Input Skins (Select 1 to Buy x10)</span>
@@ -267,7 +300,6 @@
       <div id="eligibleList" class="items-list"></div>
     </div>
 
-    <!-- SECTION 2: Multi-Input Recipe Builder -->
     <div>
       <div class="section-title">
         <span>Trade-Up Input Items (Total: 10 Items)</span>
@@ -276,7 +308,6 @@
       <div id="recipeInputsList" class="items-list"></div>
     </div>
 
-    <!-- SECTION 3: Outcomes -->
     <div>
       <div class="section-title">
         <span>All Possible Outcomes from Active Collections</span>
@@ -322,6 +353,26 @@ let secondaryPrice = null;
 
 let priceCache = window.LOCAL_PRICES || {};
 let activeOutcomes = [];
+
+function goHome() {
+  selectedTarget = null;
+  primaryPrice = null;
+  secondaryPrice = null;
+  primaryCount = 10;
+  secondaryCount = 0;
+  secondarySkin = null;
+  isStatTrak = false;
+  
+  const stBtn = document.getElementById("stToggle");
+  if (stBtn) stBtn.classList.remove("active");
+
+  document.getElementById("skinInput").value = "";
+  document.getElementById("wearSelect").value = "0.38";
+  document.getElementById("dropdownResults").style.display = "none";
+  document.getElementById("resultSection").style.display = "none";
+
+  history.replaceState(null, "", window.location.pathname);
+}
 
 function getWearName(floatVal) {
   if (floatVal < 0.07) return "Factory New";
@@ -822,7 +873,6 @@ function computeAndRenderOutcomes(inputTier) {
   }
   document.getElementById("collectionsListText").innerHTML = collText;
 
-  // Outcomes from Primary Collection
   const outcomesColl1 = allSkins.filter(s => 
     s.collections && s.collections.some(c => c.name === coll1) &&
     s.rarity && s.rarity.name === targetTier
@@ -832,7 +882,6 @@ function computeAndRenderOutcomes(inputTier) {
     activeOutcomes.push({ skin, probability: probPerColl1Item, collection: coll1 });
   });
 
-  // Outcomes from Secondary Collection
   if (primaryCount < 10 && secondarySkin) {
     const coll2 = secondarySkin.collections[0].name;
     const outcomesColl2 = allSkins.filter(s => 
