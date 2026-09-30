@@ -216,7 +216,7 @@
     .section-title { font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
     .items-list { display: flex; flex-direction: column; gap: 10px; }
 
-    /* Quick Split Preset Button Group */
+    /* Quick Split Preset Button Group & Auto-Suggester */
     .preset-container {
       display: flex;
       align-items: center;
@@ -249,6 +249,22 @@
       background: rgba(6, 182, 212, 0.15);
       border-color: var(--accent-cyan);
       color: var(--accent-cyan);
+    }
+    .auto-suggest-btn {
+      padding: 4px 10px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--accent-green);
+      border-radius: 6px;
+      color: var(--accent-green);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: 4px;
+    }
+    .auto-suggest-btn:hover {
+      background: var(--accent-green);
+      color: #0b0e14;
     }
 
     /* 10 Individual Slots Grid */
@@ -578,7 +594,6 @@
     .market-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: #17212e; color: #66c0f4; border: 1px solid #2a475e; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
     .market-link-btn:hover { background: #2a475e; color: #fff; }
 
-    /* CSFloat Deep Link Button */
     .csfloat-link-btn {
       display: inline-flex;
       align-items: center;
@@ -837,7 +852,7 @@
       <div id="eligibleList" class="items-list"></div>
     </div>
 
-    <!-- 10 Individual Slots Section -->
+    <!-- 10 Individual Slots Section with Quick Fill & Cheapest Filler Button -->
     <div id="recipeContainer">
       <div class="section-title">
         <span>Trade-Up Input Items (10 Individual Slots)</span>
@@ -847,6 +862,7 @@
           <button type="button" class="preset-btn" data-count="8" onclick="applySplitPreset(8)">8x2</button>
           <button type="button" class="preset-btn" data-count="5" onclick="applySplitPreset(5)">5x5</button>
           <button type="button" class="preset-btn" data-count="1" onclick="applySplitPreset(1)">1x9</button>
+          <button type="button" class="auto-suggest-btn" onclick="applyCheapestFiller()" title="Automatically fill open filler slots with the cheapest suggestion">⚡ Fill Cheapest Suggestions</button>
         </div>
       </div>
 
@@ -1104,6 +1120,65 @@ function applySplitPreset(primaryCount) {
   updateUrlHash();
 }
 
+/* Direct Cheapest Filler Auto-Suggester */
+function applyCheapestFiller() {
+  if (!selectedTarget) return;
+  const tierIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
+  if (tierIdx <= 0) return;
+  const inputTier = TIER_ORDER[tierIdx - 1];
+  const targetColl = selectedTarget.collections[0].name;
+  const cur = getActiveCurrency();
+
+  const candidateFillers = allSkins.filter(s => 
+    s.rarity && s.rarity.name === inputTier &&
+    s.collections && s.collections.length > 0 &&
+    s.collections[0].name !== targetColl &&
+    s.min_float !== null && s.max_float !== null
+  );
+
+  if (candidateFillers.length === 0) return;
+
+  let cheapestSkin = candidateFillers[0];
+  let cheapestPriceUSD = Infinity;
+
+  candidateFillers.forEach(skin => {
+    const sMin = skin.min_float ?? 0.00;
+    const sMax = skin.max_float ?? 1.00;
+    const defaultFloat = sMin + (sMax - sMin) * 0.05;
+    const wear = getWearName(defaultFloat);
+    const hash = getMarketHash(skin.name, wear);
+    const priceUSD = priceCache[hash];
+
+    if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD)) {
+      if (priceUSD < cheapestPriceUSD) {
+        cheapestPriceUSD = priceUSD;
+        cheapestSkin = skin;
+      }
+    }
+  });
+
+  secondarySkin = cheapestSkin;
+  const sMin = secondarySkin.min_float ?? 0.00;
+  const sMax = secondarySkin.max_float ?? 1.00;
+  const sFloatDefault = parseFloat((sMin + (sMax - sMin) * 0.05).toFixed(4));
+  const sWear = getWearName(sFloatDefault);
+  const sHash = getMarketHash(secondarySkin.name, sWear);
+  const sPriceUSD = priceCache[sHash];
+  const sPriceLocal = sPriceUSD !== undefined && sPriceUSD !== null ? parseFloat((sPriceUSD * cur.rate).toFixed(2)) : null;
+
+  slots.forEach(slot => {
+    if (slot.skin && slot.skin.collections[0].name !== targetColl) {
+      slot.skin = secondarySkin;
+      slot.float = sFloatDefault;
+      slot.price = sPriceLocal;
+    }
+  });
+
+  renderSlotCards(inputTier);
+  computeAndRenderOutcomes(inputTier);
+  updateUrlHash();
+}
+
 function getWearName(floatVal) {
   if (floatVal < 0.07) return "Factory New";
   if (floatVal < 0.15) return "Minimal Wear";
@@ -1334,7 +1409,6 @@ function getNormalizedTarget() {
   const maxF = selectedTarget.max_float ?? 1.00;
   if (maxF === minF) return 0;
 
-  // Subtract user-selected Safety Buffer to eliminate 32-bit rounding edge misses
   const safeTargetLimit = Math.max(minF, maxLimit - bufferVal);
   return Math.max(0, Math.min(1, (safeTargetLimit - minF) / (maxF - minF)));
 }
@@ -1415,14 +1489,6 @@ function renderEligibleInputs(inputTier, targetNormalized) {
   const cur = getActiveCurrency();
   const feeVal = document.getElementById("feeSelect") ? document.getElementById("feeSelect").value : "0.8696";
   const curCode = document.getElementById("currencySelect") ? document.getElementById("currencySelect").value : "INR";
-
-  const wearMap = {
-    "Factory New": "0.07",
-    "Minimal Wear": "0.15",
-    "Field-Tested": "0.38",
-    "Well-Worn": "0.45",
-    "Battle-Scarred": "1.00"
-  };
 
   const rarityColor = RARITY_COLORS[inputTier] || "var(--accent-cyan)";
   const lowerTierIndex = TIER_ORDER.indexOf(inputTier) - 1;
@@ -2180,8 +2246,8 @@ function checkUrlHashLoad() {
       document.getElementById("wearMinInput").value = (WEAR_RANGES[tierKey]?.min ?? 0.00).toFixed(4);
     }
 
-    const minVal = parseFloat(document.getElementById("wearMinInput").value);
     let matched = "CUSTOM";
+    const minVal = parseFloat(document.getElementById("wearMinInput").value);
     for (const [key, range] of Object.entries(WEAR_RANGES)) {
       if (Math.abs(minVal - range.min) < 0.0005 && Math.abs(maxVal - range.max) < 0.0005) {
         matched = key;
@@ -2222,7 +2288,6 @@ function copyShareUrl() {
   });
 }
 
-// Global click handler to close open searchable popovers
 document.addEventListener("click", function(e) {
   const searchWrapper = document.querySelector(".search-wrapper");
   if (searchWrapper && !searchWrapper.contains(e.target)) {
