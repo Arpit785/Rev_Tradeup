@@ -92,7 +92,7 @@
 
     .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px; }
 
-    .control-group-top { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .control-group-top { display: grid; grid-template-columns: 2fr 1.2fr; gap: 14px; margin-bottom: 14px; }
     .control-group-options {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -111,6 +111,53 @@
     label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
     input, select { width: 100%; background: var(--bg-card-secondary); border: 1px solid var(--border-color); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 14px; outline: none; }
     input:focus, select:focus { border-color: var(--accent-cyan); }
+
+    /* Wear Rating Widget */
+    .wear-rating-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .wear-inputs-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .wear-inputs-row input {
+      text-align: center;
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 6px;
+    }
+    .wear-bar-wrapper {
+      position: relative;
+      padding: 4px 0 10px 0;
+      margin-top: 2px;
+    }
+    .wear-bar {
+      display: flex;
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+      background: #1e2533;
+    }
+    .wear-seg-fn { width: 7%; background: #22c55e; }
+    .wear-seg-mw { width: 8%; background: #84cc16; }
+    .wear-seg-ft { width: 23%; background: #eab308; }
+    .wear-seg-ww { width: 7%; background: #f97316; }
+    .wear-seg-bs { width: 55%; background: #ef4444; }
+    .wear-caret {
+      position: absolute;
+      bottom: -1px;
+      transform: translateX(-50%);
+      font-size: 10px;
+      line-height: 1;
+      color: #ffffff;
+      transition: left 0.15s ease-out;
+      pointer-events: none;
+      user-select: none;
+    }
 
     .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
     .action-btn:hover { border-color: var(--accent-cyan); color: #fff; }
@@ -283,15 +330,35 @@
         <div id="dropdownResults" class="dropdown-results"></div>
       </div>
 
-      <div>
-        <label for="wearSelect">Target Outcome Wear</label>
-        <select id="wearSelect" onchange="onSettingChange()">
-          <option value="0.07">Factory New (&lt; 0.07)</option>
-          <option value="0.15">Minimal Wear (&lt; 0.15)</option>
-          <option value="0.38" selected>Field-Tested (&lt; 0.38)</option>
-          <option value="0.45">Well-Worn (&lt; 0.45)</option>
-          <option value="1.00">Battle-Scarred (&le; 1.00)</option>
+      <!-- Upgraded Wear Rating Widget -->
+      <div class="wear-rating-box">
+        <label>Wear Rating</label>
+        <select id="exteriorSelect" onchange="onExteriorChange()">
+          <option value="FN">Factory New (0.00 – 0.07)</option>
+          <option value="MW">Minimal Wear (0.07 – 0.15)</option>
+          <option value="FT" selected>Field-Tested (0.15 – 0.38)</option>
+          <option value="WW">Well-Worn (0.38 – 0.45)</option>
+          <option value="BS">Battle-Scarred (0.45 – 1.00)</option>
+          <option value="CUSTOM">Custom Range</option>
         </select>
+
+        <div class="wear-inputs-row">
+          <input type="number" id="wearMinInput" step="0.0001" min="0" max="1" placeholder="Min" value="0.1500" oninput="onCustomWearInput()">
+          <span style="color: var(--text-muted); font-weight: bold;">-</span>
+          <input type="number" id="wearMaxInput" step="0.0001" min="0" max="1" placeholder="Max" value="0.3800" oninput="onCustomWearInput()">
+        </div>
+
+        <div class="wear-bar-wrapper">
+          <div class="wear-bar">
+            <div class="wear-seg-fn" title="Factory New (0.00 - 0.07)"></div>
+            <div class="wear-seg-mw" title="Minimal Wear (0.07 - 0.15)"></div>
+            <div class="wear-seg-ft" title="Field-Tested (0.15 - 0.38)"></div>
+            <div class="wear-seg-ww" title="Well-Worn (0.38 - 0.45)"></div>
+            <div class="wear-seg-bs" title="Battle-Scarred (0.45 - 1.00)"></div>
+          </div>
+          <div id="wearCaretMin" class="wear-caret" style="left: 15%;">▲</div>
+          <div id="wearCaretMax" class="wear-caret" style="left: 38%;">▲</div>
+        </div>
       </div>
     </div>
 
@@ -417,6 +484,14 @@ const CURRENCIES = {
   EUR: { symbol: "€", rate: 0.92 }
 };
 
+const WEAR_RANGES = {
+  FN: { min: 0.00, max: 0.07 },
+  MW: { min: 0.07, max: 0.15 },
+  FT: { min: 0.15, max: 0.38 },
+  WW: { min: 0.38, max: 0.45 },
+  BS: { min: 0.45, max: 1.00 }
+};
+
 let allSkins = [];
 let validTargetSkins = [];
 let selectedTarget = null;
@@ -452,8 +527,10 @@ function goHome() {
   const inputEl = document.getElementById("skinInput");
   if (inputEl) inputEl.value = "";
 
-  const wearEl = document.getElementById("wearSelect");
-  if (wearEl) wearEl.value = "0.38";
+  document.getElementById("exteriorSelect").value = "FT";
+  document.getElementById("wearMinInput").value = "0.1500";
+  document.getElementById("wearMaxInput").value = "0.3800";
+  updateWearPointers();
 
   const dropEl = document.getElementById("dropdownResults");
   if (dropEl) {
@@ -465,6 +542,41 @@ function goHome() {
   if (resSection) resSection.style.display = "none";
 
   history.replaceState(null, "", window.location.pathname);
+}
+
+function onExteriorChange() {
+  const val = document.getElementById("exteriorSelect").value;
+  if (val && WEAR_RANGES[val]) {
+    document.getElementById("wearMinInput").value = WEAR_RANGES[val].min.toFixed(4);
+    document.getElementById("wearMaxInput").value = WEAR_RANGES[val].max.toFixed(4);
+  }
+  updateWearPointers();
+  onSettingChange();
+}
+
+function onCustomWearInput() {
+  const minVal = parseFloat(document.getElementById("wearMinInput").value) || 0;
+  const maxVal = parseFloat(document.getElementById("wearMaxInput").value) || 1;
+
+  let matched = "CUSTOM";
+  for (const [key, range] of Object.entries(WEAR_RANGES)) {
+    if (Math.abs(minVal - range.min) < 0.0005 && Math.abs(maxVal - range.max) < 0.0005) {
+      matched = key;
+      break;
+    }
+  }
+  document.getElementById("exteriorSelect").value = matched;
+  updateWearPointers();
+  onSettingChange();
+}
+
+function updateWearPointers() {
+  const minVal = Math.max(0, Math.min(1, parseFloat(document.getElementById("wearMinInput").value) || 0));
+  const maxVal = Math.max(0, Math.min(1, parseFloat(document.getElementById("wearMaxInput").value) || 1));
+  const cMin = document.getElementById("wearCaretMin");
+  const cMax = document.getElementById("wearCaretMax");
+  if (cMin) cMin.style.left = `${(minVal * 100).toFixed(1)}%`;
+  if (cMax) cMax.style.left = `${(maxVal * 100).toFixed(1)}%`;
 }
 
 function getWearName(floatVal) {
@@ -695,11 +807,11 @@ function selectSkin(skin) {
 
 function getNormalizedTarget() {
   if (!selectedTarget) return 0;
-  const targetWearLimit = parseFloat(document.getElementById("wearSelect").value);
+  const maxLimit = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
   const minF = selectedTarget.min_float ?? 0.00;
   const maxF = selectedTarget.max_float ?? 1.00;
   if (maxF === minF) return 0;
-  const safeTargetLimit = Math.max(minF, targetWearLimit - 0.0005);
+  const safeTargetLimit = Math.max(minF, maxLimit - 0.0005);
   return Math.max(0, Math.min(1, (safeTargetLimit - minF) / (maxF - minF)));
 }
 
@@ -717,7 +829,6 @@ function runCalculation() {
 
   const inputTier = TIER_ORDER[currentTierIndex - 1];
 
-  // If no lower-tier inputs exist in this collection (e.g. Mil-Spec skin from a case)
   if (!targetCollInputs || targetCollInputs.length === 0) {
     resSection.style.display = "flex";
     noticeBox.style.display = "block";
@@ -769,14 +880,6 @@ function renderEligibleInputs(inputTier, targetNormalized) {
   const feeVal = document.getElementById("feeSelect") ? document.getElementById("feeSelect").value : "0.8696";
   const curCode = document.getElementById("currencySelect") ? document.getElementById("currencySelect").value : "INR";
 
-  const wearMap = {
-    "Factory New": "0.07",
-    "Minimal Wear": "0.15",
-    "Field-Tested": "0.38",
-    "Well-Worn": "0.45",
-    "Battle-Scarred": "1.00"
-  };
-
   const rarityColor = RARITY_COLORS[inputTier] || "var(--accent-cyan)";
   const lowerTierIndex = TIER_ORDER.indexOf(inputTier) - 1;
   const lowerTierName = lowerTierIndex >= 0 ? TIER_ORDER[lowerTierIndex] : null;
@@ -794,15 +897,14 @@ function renderEligibleInputs(inputTier, targetNormalized) {
       priceDisplay = (priceValUSD * cur.rate).toFixed(2);
     }
 
-    // Only show "Trade-Up ↗" if this skin's collection actually contains skins from the tier below it
     const skinCollName = skin.collections[0]?.name;
     const canCraftThisSkin = lowerTierName && allSkins.some(s => 
       s.collections && s.collections.some(c => c.name === skinCollName) &&
       s.rarity && s.rarity.name === lowerTierName
     );
 
-    const craftWearVal = wearMap[neededWear] || "0.38";
-    const craftHash = `#target=${encodeURIComponent(skin.name)}&wear=${craftWearVal}&st=${isStatTrak ? "1" : "0"}&fee=${feeVal}&cur=${curCode}`;
+    // Pass the exact calculated raw float cap into the new tab
+    const craftHash = `#target=${encodeURIComponent(skin.name)}&wearMax=${rawCap.toFixed(4)}&wearMin=${inMin.toFixed(4)}&st=${isStatTrak ? "1" : "0"}&fee=${feeVal}&cur=${curCode}`;
 
     const isSelected = index === selectedPrimaryIndex;
     const row = document.createElement("div");
@@ -1146,7 +1248,8 @@ function renderOutcomeCards(avgWeightedFloat) {
   container.innerHTML = "";
   const cur = getActiveCurrency();
   const targetTier = targetRarity(selectedTarget);
-  const targetWearLimit = parseFloat(document.getElementById("wearSelect").value);
+  const targetMaxLimit = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
+  const targetMinLimit = parseFloat(document.getElementById("wearMinInput").value) || 0.00;
   const rarityColor = RARITY_COLORS[targetTier] || "var(--accent-cyan)";
 
   let targetSkinOdds = 0;
@@ -1167,7 +1270,7 @@ function renderOutcomeCards(avgWeightedFloat) {
     const priceValUSD = priceCache[hashName];
     const priceDisplay = priceValUSD !== undefined && priceValUSD !== null ? (priceValUSD * cur.rate).toFixed(2) : "";
     const isTargetSkin = skin.name === selectedTarget.name;
-    const isWearMatch = outcomeFloat <= targetWearLimit;
+    const isWearMatch = outcomeFloat <= targetMaxLimit && outcomeFloat >= (targetMinLimit - 0.0001);
 
     const row = document.createElement("div");
     row.className = "item-row";
@@ -1351,7 +1454,8 @@ function updateUrlHash() {
   if (!selectedTarget) return;
   const params = new URLSearchParams();
   params.set("target", selectedTarget.name);
-  params.set("wear", document.getElementById("wearSelect").value);
+  params.set("wearMin", document.getElementById("wearMinInput").value);
+  params.set("wearMax", document.getElementById("wearMaxInput").value);
   params.set("pCount", primaryCount);
   params.set("pFloat", primaryFloat);
   params.set("st", isStatTrak ? "1" : "0");
@@ -1378,7 +1482,32 @@ function checkUrlHashLoad() {
     isStatTrak = true;
     document.getElementById("stToggle").classList.add("active");
   }
-  if (params.get("wear")) document.getElementById("wearSelect").value = params.get("wear");
+
+  const wearMaxParam = params.get("wearMax") || params.get("wear");
+  const wearMinParam = params.get("wearMin");
+  if (wearMaxParam) {
+    const maxVal = parseFloat(wearMaxParam);
+    document.getElementById("wearMaxInput").value = maxVal.toFixed(4);
+    if (wearMinParam) {
+      document.getElementById("wearMinInput").value = parseFloat(wearMinParam).toFixed(4);
+    } else {
+      const wearTier = getWearName(maxVal);
+      const tierKey = wearTier === "Factory New" ? "FN" : wearTier === "Minimal Wear" ? "MW" : wearTier === "Field-Tested" ? "FT" : wearTier === "Well-Worn" ? "WW" : "BS";
+      document.getElementById("wearMinInput").value = (WEAR_RANGES[tierKey]?.min ?? 0.00).toFixed(4);
+    }
+
+    const minVal = parseFloat(document.getElementById("wearMinInput").value);
+    let matched = "CUSTOM";
+    for (const [key, range] of Object.entries(WEAR_RANGES)) {
+      if (Math.abs(minVal - range.min) < 0.0005 && Math.abs(maxVal - range.max) < 0.0005) {
+        matched = key;
+        break;
+      }
+    }
+    document.getElementById("exteriorSelect").value = matched;
+    updateWearPointers();
+  }
+
   if (params.get("fee")) document.getElementById("feeSelect").value = params.get("fee");
   if (params.get("cur")) document.getElementById("currencySelect").value = params.get("cur");
 
