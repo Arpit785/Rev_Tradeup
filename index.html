@@ -28,7 +28,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--bg-main); color: var(--text-main); padding: 16px 12px; display: flex; justify-content: center; }
+    body { background-color: var(--bg-main); color: var(--text-main); padding: 16px 12px; display: flex; justify-content: center; overflow-x: hidden; }
     .container { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 16px; }
 
     .header {
@@ -123,7 +123,7 @@
     }
     @media (max-width: 760px) {
       .header { flex-direction: column; align-items: flex-start; }
-      .header-actions { width: 100%; justify-content: flex-start; }
+      .header-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
       .control-group-top { grid-template-columns: 1fr; }
       .control-group-options { grid-template-columns: repeat(2, 1fr); }
     }
@@ -183,7 +183,7 @@
       user-select: none;
     }
 
-    .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; padding: 0 10px; }
     .action-btn:hover { border-color: var(--accent-cyan); color: #fff; }
     .action-btn.active { background: rgba(245, 158, 11, 0.15); border-color: var(--accent-gold); color: var(--accent-gold); }
 
@@ -216,380 +216,70 @@
     .section-title { font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
     .items-list { display: flex; flex-direction: column; gap: 10px; }
 
-    /* Quick Split Preset Button Group & Auto-Suggester */
-    .preset-container {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .preset-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      font-weight: 700;
-      margin-right: 2px;
-    }
-    .preset-btn {
-      padding: 4px 8px;
-      background: var(--bg-main);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .preset-btn:hover {
-      border-color: var(--accent-cyan);
-      color: #fff;
-    }
-    .preset-btn.active {
-      background: rgba(6, 182, 212, 0.15);
-      border-color: var(--accent-cyan);
-      color: var(--accent-cyan);
-    }
-    .auto-suggest-btn {
-      padding: 4px 10px;
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid var(--accent-green);
-      border-radius: 6px;
-      color: var(--accent-green);
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-left: 4px;
-    }
-    .auto-suggest-btn:hover {
-      background: var(--accent-green);
-      color: #0b0e14;
-    }
+    .preset-container { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .preset-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-right: 2px; }
+    .preset-btn { padding: 4px 8px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-muted); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .preset-btn:hover { border-color: var(--accent-cyan); color: #fff; }
+    .preset-btn.active { background: rgba(6, 182, 212, 0.15); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .auto-suggest-btn { padding: 4px 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-green); border-radius: 6px; color: var(--accent-green); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-left: 4px; }
+    .auto-suggest-btn:hover { background: var(--accent-green); color: #0b0e14; }
 
-    /* 10 Individual Slots Grid */
-    .slots-config-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-card-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: 10px;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .slots-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-    }
-    @media (max-width: 860px) {
-      .slots-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (max-width: 580px) {
-      .slots-grid { grid-template-columns: repeat(2, 1fr); }
-    }
+    .slots-config-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+    .slots-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    @media (max-width: 860px) { .slots-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 580px) { .slots-grid { grid-template-columns: repeat(2, 1fr); } }
 
-    .slot-card {
-      background: var(--bg-card-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 12px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      position: relative;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .slot-card:hover {
-      border-color: rgba(6, 182, 212, 0.5);
-    }
-    .slot-card.is-target-coll {
-      border-left: 3px solid var(--accent-green);
-    }
-    .slot-card.is-other-coll {
-      border-left: 3px solid var(--accent-cyan);
-    }
+    .slot-card { background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; position: relative; transition: border-color 0.2s, background 0.2s; }
+    .slot-card:hover { border-color: rgba(6, 182, 212, 0.5); }
+    .slot-card.is-target-coll { border-left: 3px solid var(--accent-green); }
+    .slot-card.is-other-coll { border-left: 3px solid var(--accent-cyan); }
 
-    .slot-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .slot-num-badge {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
-    }
-    .slot-steam-link {
-      font-size: 10px;
-      color: #66c0f4;
-      text-decoration: none;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 2px;
-      transition: color 0.15s;
-    }
-    .slot-steam-link:hover {
-      color: #fff;
-      text-decoration: underline;
-    }
+    .slot-card-header { display: flex; justify-content: space-between; align-items: center; }
+    .slot-num-badge { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; }
+    
+    .slot-steam-link { font-size: 10px; color: #66c0f4; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 2px; transition: color 0.15s; }
+    .slot-steam-link:hover { color: #fff; text-decoration: underline; }
+    .slot-slot-craft-link { font-size: 10px; color: var(--accent-green); text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 2px; transition: color 0.15s; margin-left: 6px; }
+    .slot-slot-craft-link:hover { color: #fff; text-decoration: underline; }
 
-    .slot-slot-craft-link {
-      font-size: 10px;
-      color: var(--accent-green);
-      text-decoration: none;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      gap: 2px;
-      transition: color 0.15s;
-    }
-    .slot-slot-craft-link:hover {
-      color: #fff;
-      text-decoration: underline;
-    }
+    .slot-thumb-box { width: 100%; height: 105px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); position: relative; overflow: hidden; padding: 6px; transition: background 0.25s, border-color 0.25s; }
+    .slot-thumb { max-width: 92%; max-height: 85px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.65)); transition: transform 0.2s ease; }
+    .slot-card:hover .slot-thumb { transform: scale(1.05); }
 
-    /* Vertical Image Box with Ambient Rarity Background */
-    .slot-thumb-box {
-      width: 100%;
-      height: 105px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.06);
-      position: relative;
-      overflow: hidden;
-      padding: 6px;
-      transition: background 0.25s, border-color 0.25s;
-    }
-    .slot-thumb {
-      max-width: 92%;
-      max-height: 85px;
-      object-fit: contain;
-      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.65));
-      transition: transform 0.2s ease;
-    }
-    .slot-card:hover .slot-thumb {
-      transform: scale(1.05);
-    }
+    .slot-picker-wrap { position: relative; width: 100%; }
+    .slot-picker-btn { width: 100%; height: 38px; padding: 8px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; background: #090d14; border: 1px solid var(--border-color); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; text-align: left; gap: 6px; transition: border-color 0.2s, background 0.2s; }
+    .slot-picker-btn:hover, .slot-picker-btn.active { border-color: var(--accent-cyan); background: #0d131f; }
+    .slot-picker-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .slot-picker-arrow { font-size: 9px; color: var(--text-muted); flex-shrink: 0; transition: transform 0.2s; }
+    .slot-picker-btn.active .slot-picker-arrow { transform: rotate(180deg); color: var(--accent-cyan); }
 
-    /* Custom Searchable Dropdown Component (Same Size: 38px) */
-    .slot-picker-wrap {
-      position: relative;
-      width: 100%;
-    }
-    .slot-picker-btn {
-      width: 100%;
-      height: 38px;
-      padding: 8px 10px;
-      font-size: 12px;
-      font-weight: 700;
-      border-radius: 6px;
-      background: #090d14;
-      border: 1px solid var(--border-color);
-      color: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      text-align: left;
-      gap: 6px;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .slot-picker-btn:hover, .slot-picker-btn.active {
-      border-color: var(--accent-cyan);
-      background: #0d131f;
-    }
-    .slot-picker-text {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-    }
-    .slot-picker-arrow {
-      font-size: 9px;
-      color: var(--text-muted);
-      flex-shrink: 0;
-      transition: transform 0.2s;
-    }
-    .slot-picker-btn.active .slot-picker-arrow {
-      transform: rotate(180deg);
-      color: var(--accent-cyan);
-    }
+    .slot-dropdown-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; min-width: 230px; background: #111622; border: 1px solid var(--accent-cyan); border-radius: 8px; box-shadow: 0 12px 30px rgba(0,0,0,0.85); z-index: 9999; overflow: hidden; }
+    .slot-dropdown-panel.open { display: flex; flex-direction: column; }
+    .slot-search-box { padding: 8px; background: #0b0e14; border-bottom: 1px solid var(--border-color); }
+    .slot-search-input { width: 100%; height: 32px; padding: 6px 10px; background: #171d2b; border: 1px solid var(--border-color); border-radius: 5px; color: #fff; font-size: 11px; outline: none; }
+    .slot-search-input:focus { border-color: var(--accent-cyan); }
+    .slot-options-scroll { max-height: 230px; overflow-y: auto; }
+    .slot-optgroup-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent-cyan); padding: 6px 10px 4px 10px; background: rgba(6, 182, 212, 0.08); border-top: 1px solid rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .slot-opt-item { padding: 7px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s; }
+    .slot-opt-item:hover, .slot-opt-item.selected { background: #1b2333; }
+    .slot-opt-name { font-size: 11px; font-weight: 700; color: #fff; }
+    .slot-opt-coll { font-size: 9px; color: var(--text-muted); }
 
-    .slot-dropdown-panel {
-      display: none;
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      right: 0;
-      min-width: 230px;
-      background: #111622;
-      border: 1px solid var(--accent-cyan);
-      border-radius: 8px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.85);
-      z-index: 9999;
-      overflow: hidden;
-    }
-    .slot-dropdown-panel.open {
-      display: flex;
-      flex-direction: column;
-    }
-    .slot-search-box {
-      padding: 8px;
-      background: #0b0e14;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .slot-search-input {
-      width: 100%;
-      height: 32px;
-      padding: 6px 10px;
-      background: #171d2b;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      color: #fff;
-      font-size: 11px;
-      outline: none;
-    }
-    .slot-search-input:focus {
-      border-color: var(--accent-cyan);
-    }
-    .slot-options-scroll {
-      max-height: 230px;
-      overflow-y: auto;
-    }
-    .slot-optgroup-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--accent-cyan);
-      padding: 6px 10px 4px 10px;
-      background: rgba(6, 182, 212, 0.08);
-      border-top: 1px solid rgba(255,255,255,0.04);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .slot-opt-item {
-      padding: 7px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      cursor: pointer;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-      transition: background 0.15s;
-    }
-    .slot-opt-item:hover, .slot-opt-item.selected {
-      background: #1b2333;
-    }
-    .slot-opt-name {
-      font-size: 11px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .slot-opt-coll {
-      font-size: 9px;
-      color: var(--text-muted);
-    }
+    .slot-skin-coll { font-size: 9px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -3px; }
 
-    .slot-skin-coll {
-      font-size: 9px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: -3px;
-    }
+    .slot-wear-bar-box { position: relative; width: 100%; margin: 2px 0; }
+    .slot-wear-bar { height: 4px; display: flex; border-radius: 2px; overflow: hidden; background: #1e2533; }
+    .slot-wear-marker { position: absolute; top: -2px; width: 2px; height: 8px; background: #fff; border-radius: 1px; transform: translateX(-50%); pointer-events: none; box-shadow: 0 0 3px rgba(0,0,0,0.8); }
 
-    /* Slot mini wear progress bar */
-    .slot-wear-bar-box {
-      position: relative;
-      width: 100%;
-      margin: 2px 0;
-    }
-    .slot-wear-bar {
-      height: 4px;
-      display: flex;
-      border-radius: 2px;
-      overflow: hidden;
-      background: #1e2533;
-    }
-    .slot-wear-marker {
-      position: absolute;
-      top: -2px;
-      width: 2px;
-      height: 8px;
-      background: #fff;
-      border-radius: 1px;
-      transform: translateX(-50%);
-      pointer-events: none;
-      box-shadow: 0 0 3px rgba(0,0,0,0.8);
-    }
+    .slot-input-group { display: flex; flex-direction: column; gap: 4px; margin-top: 1px; }
+    .slot-input-lbl { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+    .slot-input-field { width: 100%; height: 38px; padding: 8px 10px; font-size: 13px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; border-radius: 6px; background: #090d14; border: 1px solid var(--border-color); color: #fff; text-align: left; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s; }
+    .slot-input-field:focus { border-color: var(--accent-cyan); box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.25); background: #0b101a; outline: none; }
 
-    /* Spacious, Tall Input Boxes (38px) */
-    .slot-input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-top: 1px;
-    }
-    .slot-input-lbl {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .slot-input-field {
-      width: 100%;
-      height: 38px;
-      padding: 8px 10px;
-      font-size: 13px;
-      font-weight: 700;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-      border-radius: 6px;
-      background: #090d14;
-      border: 1px solid var(--border-color);
-      color: #fff;
-      text-align: left;
-      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-    }
-    .slot-input-field:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.25);
-      background: #0b101a;
-      outline: none;
-    }
-
-    .item-row {
-      background: var(--bg-card-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .item-row.selectable {
-      cursor: pointer;
-    }
-    .item-row.selectable:hover {
-      border-color: rgba(6, 182, 212, 0.4);
-    }
-    .item-row.selected {
-      border-color: var(--accent-cyan);
-      background: #141c2a;
-    }
+    .item-row { background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; transition: border-color 0.2s, background 0.2s; }
+    .item-row.selectable { cursor: pointer; }
+    .item-row.selectable:hover { border-color: rgba(6, 182, 212, 0.4); }
+    .item-row.selected { border-color: var(--accent-cyan); background: #141c2a; }
 
     .item-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
     .rarity-pill { width: 4px; height: 56px; border-radius: 2px; flex-shrink: 0; }
@@ -609,45 +299,11 @@
     .market-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: #17212e; color: #66c0f4; border: 1px solid #2a475e; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
     .market-link-btn:hover { background: #2a475e; color: #fff; }
 
-    .csfloat-link-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 7px 10px;
-      background: rgba(249, 115, 22, 0.12);
-      color: var(--accent-csfloat);
-      border: 1px solid rgba(249, 115, 22, 0.35);
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-    .csfloat-link-btn:hover {
-      background: var(--accent-csfloat);
-      color: #0b0e14;
-    }
+    .csfloat-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: rgba(249, 115, 22, 0.12); color: var(--accent-csfloat); border: 1px solid rgba(249, 115, 22, 0.35); border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; transition: all 0.2s; }
+    .csfloat-link-btn:hover { background: var(--accent-csfloat); color: #0b0e14; }
 
-    .craft-link-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 7px 10px;
-      background: rgba(16, 185, 129, 0.12);
-      color: var(--accent-green);
-      border: 1px solid var(--accent-green);
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-    .craft-link-btn:hover {
-      background: var(--accent-green);
-      color: #0b0e14;
-    }
+    .craft-link-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px; background: rgba(16, 185, 129, 0.12); color: var(--accent-green); border: 1px solid var(--accent-green); border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; transition: all 0.2s; }
+    .craft-link-btn:hover { background: var(--accent-green); color: #0b0e14; }
 
     .select-btn { padding: 7px 12px; background: #232c3d; color: #fff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
     .select-btn.active { background: var(--accent-cyan); color: #0b0e14; border-color: var(--accent-cyan); }
@@ -662,38 +318,79 @@
     .condition-pill.risky { background: rgba(245, 158, 11, 0.2); color: var(--accent-gold); border: 1px solid rgba(245, 158, 11, 0.5); }
     .condition-pill.miss { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid rgba(239, 68, 68, 0.4); }
 
-    .pnl-badge {
-      font-size: 12px;
-      font-weight: 700;
-      padding: 6px 10px;
-      border-radius: 6px;
-      white-space: nowrap;
-      min-width: 90px;
-      text-align: center;
-      background: var(--bg-main);
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
-    }
-    .pnl-badge.green {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: var(--accent-green);
-      color: var(--accent-green);
-    }
-    .pnl-badge.red {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: var(--accent-red);
-      color: var(--accent-red);
-    }
+    .pnl-badge { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 6px; white-space: nowrap; min-width: 90px; text-align: center; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-muted); }
+    .pnl-badge.green { background: rgba(16, 185, 129, 0.15); border-color: var(--accent-green); color: var(--accent-green); }
+    .pnl-badge.red { background: rgba(239, 68, 68, 0.15); border-color: var(--accent-red); color: var(--accent-red); }
 
-    .notice-card {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid var(--accent-red);
-      color: #fca5a5;
-      padding: 16px 20px;
-      border-radius: 10px;
-      font-size: 13px;
-      line-height: 1.5;
-    }
+    .notice-card { background: rgba(239, 68, 68, 0.1); border: 1px solid var(--accent-red); color: #fca5a5; padding: 16px 20px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+
+    /* Saved Recipes Binder Styles */
+    .binder-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 2000; backdrop-filter: blur(3px); }
+    .binder-panel { position: fixed; top: 0; right: -380px; width: 340px; max-width: 100%; height: 100%; background: var(--bg-card); border-left: 1px solid var(--border-color); z-index: 2001; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.8); }
+    .binder-panel.open { right: 0; }
+    .binder-header { padding: 18px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-secondary); }
+    .binder-title { font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .binder-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; }
+    .binder-close:hover { color: var(--accent-red); }
+    .binder-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .saved-card { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.2s; }
+    .saved-card:hover { border-color: var(--accent-cyan); }
+    .saved-card-title { font-size: 13px; font-weight: 700; color: var(--accent-cyan); line-height: 1.3; }
+    .saved-card-date { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+    .saved-card-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .saved-btn-load { flex: 1; background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); border-radius: 6px; padding: 8px; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; }
+    .saved-btn-load:hover { background: var(--accent-green); color: #000; }
+    .saved-btn-del { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .saved-btn-del:hover { background: var(--accent-red); color: #fff; }
+    .binder-empty { text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 40px; line-height: 1.6; }
+
+    /* Virtual Simulator Styles */
+    .sign-contract-btn { width: 100%; background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%); border: 1px solid var(--accent-green); color: #fff; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; padding: 16px; border-radius: 12px; cursor: pointer; margin-top: 10px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.1); }
+    .sign-contract-btn:hover { background: linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(6, 182, 212, 0.4) 100%); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3); transform: translateY(-2px); }
+
+    .sim-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(11, 14, 20, 0.95); z-index: 3000; backdrop-filter: blur(8px); align-items: center; justify-content: center; flex-direction: column; padding: 20px; }
+    .sim-modal { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 580px; padding: 30px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8); position: relative; }
+    .sim-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 28px; cursor: pointer; transition: color 0.2s; }
+    .sim-close:hover { color: var(--accent-red); }
+    
+    .sim-prep-text { font-size: 18px; font-weight: 700; color: #fff; text-align: center; margin-bottom: 20px; }
+    .sim-action-btn { background: #eab308; color: #000; border: none; font-size: 16px; font-weight: 800; text-transform: uppercase; padding: 14px 30px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px rgba(234, 179, 8, 0.4); }
+    .sim-action-btn:hover { background: #fde047; transform: scale(1.05); box-shadow: 0 0 25px rgba(234, 179, 8, 0.6); }
+
+    .sim-signing-container { width: 100%; height: 4px; background: #1e2533; border-radius: 2px; margin: 30px 0; position: relative; overflow: hidden; }
+    .sim-signature { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: #eab308; box-shadow: 0 0 10px #eab308; animation: drawSignature 2.5s ease-in-out forwards; }
+    .sim-status { margin-top: 15px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; animation: pulseText 1s infinite alternate; text-align: center; }
+
+    @keyframes drawSignature { 0% { width: 0%; } 40% { width: 45%; } 60% { width: 45%; } 100% { width: 100%; } }
+    @keyframes pulseText { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+    @keyframes revealPop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+
+    .sim-result-box { display: flex; flex-direction: column; align-items: center; animation: revealPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; width: 100%; }
+    .sim-result-title { font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 15px; }
+    .sim-result-thumb { width: 220px; height: 160px; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
+    .sim-result-name { font-size: 22px; font-weight: 800; color: #fff; text-align: center; margin-bottom: 8px; }
+    .sim-result-details { font-size: 14px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 20px; }
+    
+    .sim-result-pnl { font-size: 18px; font-weight: 800; padding: 10px 20px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .sim-result-pnl.loss { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); border-color: var(--accent-red); }
+
+    /* Simulator Statistics Container */
+    .sim-stats-container { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 25px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; width: 100%; border: 1px solid rgba(255,255,255,0.03); }
+    .sim-stat-box { display: flex; flex-direction: column; align-items: center; background: var(--bg-card-secondary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 6px; min-width: 70px; flex: 1; }
+    .sim-stat-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+    .sim-stat-val { font-size: 13px; font-weight: 800; color: #fff; margin-top: 3px; }
+    .sim-stat-val.green { color: var(--accent-green); }
+    .sim-stat-val.red { color: var(--accent-red); }
+    .sim-stat-val.gold { color: var(--accent-gold); }
+
+    /* Session Outcome Distribution Grid */
+    .sim-outcomes-header { font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); margin: 20px 0 10px; width: 100%; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px; }
+    .sim-outcomes-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; width: 100%; max-height: 160px; overflow-y: auto; padding: 10px 5px; }
+    .sim-outcome-mini-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; position: relative; width: 75px; transition: all 0.2s; }
+    .sim-outcome-mini-card.hit { border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.05); transform: scale(1.05); }
+    .sim-outcome-thumb { width: 55px; height: 40px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+    .sim-hit-badge { position: absolute; top: -8px; right: -8px; background: var(--accent-cyan); color: #0b0e14; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.8); border: 1px solid #111622; }
+    .sim-hit-badge.zero { background: #1e2533; color: var(--text-muted); border-color: var(--border-color); box-shadow: none; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -714,6 +411,9 @@
         <option value="USD">USD ($)</option>
         <option value="EUR">EUR (€)</option>
       </select>
+      <button class="home-btn" style="color: var(--accent-gold); border-color: var(--border-color);" onclick="toggleBinder()" title="Open Saved Recipes Binder">
+        <span>⭐ Binder</span>
+      </button>
       <button class="home-btn" onclick="goHome()" title="Reset calculator to home screen">
         <span>🏠 Home</span>
       </button>
@@ -760,11 +460,11 @@
       </div>
     </div>
 
-    <!-- Options Toolbar: StatTrak, Fee, Safety Buffer, Share -->
+    <!-- Options Toolbar -->
     <div class="control-group-options">
       <div>
         <label>Version</label>
-        <button id="stToggle" class="action-btn" onclick="toggleStatTrak()">
+        <button id="stToggle" class="action-btn" onclick="toggleStatTrak()" style="width: 100%;">
           <span>StatTrak™</span>
         </button>
       </div>
@@ -790,16 +490,20 @@
       </div>
 
       <div>
-        <label>Share Recipe</label>
-        <button id="shareBtn" class="action-btn" style="color: var(--accent-cyan);" onclick="copyShareUrl()">
-          <span id="shareBtnText">🔗 Copy Link</span>
-        </button>
+        <label>Recipe Actions</label>
+        <div style="display: flex; gap: 6px;">
+          <button id="saveBinderBtn" class="action-btn" style="color: var(--accent-gold); flex: 1;" onclick="saveCurrentRecipe()" title="Save this setup to your local Binder">
+            <span id="saveBinderText">⭐ Save</span>
+          </button>
+          <button id="shareBtn" class="action-btn" style="color: var(--accent-cyan); flex: 1;" onclick="copyShareUrl()" title="Copy URL to clipboard">
+            <span id="shareBtnText">🔗 Link</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <div id="resultSection" class="result-section">
-    <!-- Notice box for uncraftable base items -->
     <div id="uncraftableNotice" class="notice-card" style="display: none;"></div>
 
     <div class="collection-breakdown-box">
@@ -807,7 +511,7 @@
       <div id="collectionsListText"></div>
     </div>
 
-    <!-- Financial Grid Row 1: Direct Financial Totals -->
+    <!-- Financial Grid -->
     <div class="financial-grid">
       <div class="stat-box">
         <span class="stat-label">Total Input Cost</span>
@@ -827,7 +531,7 @@
       </div>
     </div>
 
-    <!-- Financial Grid Row 2: Odds, Probability of Profit & Extremes -->
+    <!-- Financial Grid Row 2 -->
     <div class="financial-grid">
       <div class="stat-box">
         <span class="stat-label">Chance to Profit (Win Rate)</span>
@@ -859,6 +563,9 @@
       </div>
     </div>
 
+    <!-- Simulator Button -->
+    <button class="sign-contract-btn" onclick="openSimulator()">✍️ Sign Contract (Simulate Roll)</button>
+
     <div id="eligibleContainer">
       <div class="section-title">
         <span>Eligible Input Skins (Select 1 to Quick-Fill x10)</span>
@@ -867,7 +574,7 @@
       <div id="eligibleList" class="items-list"></div>
     </div>
 
-    <!-- 10 Individual Slots Section with Multi-Skin Diverse Filler Distribution & Craft Links -->
+    <!-- 10 Individual Slots Section -->
     <div id="recipeContainer">
       <div class="section-title">
         <span>Trade-Up Input Items (10 Individual Slots)</span>
@@ -907,6 +614,28 @@
   </div>
 </div>
 
+<!-- Saved Recipes Binder Overlay & Panel -->
+<div id="binderOverlay" class="binder-overlay" onclick="toggleBinder()"></div>
+<div id="binderPanel" class="binder-panel">
+  <div class="binder-header">
+    <div class="binder-title">⭐ Saved Recipes</div>
+    <button class="binder-close" onclick="toggleBinder()">&times;</button>
+  </div>
+  <div id="binderContent" class="binder-content">
+    <!-- Saved recipes injected here -->
+  </div>
+</div>
+
+<!-- Virtual Contract Simulator Modal -->
+<div id="simulatorOverlay" class="sim-overlay">
+  <div class="sim-modal">
+    <button class="sim-close" onclick="closeSimulator()">&times;</button>
+    <div id="simulatorReveal">
+      <!-- Injected Simulator Logic -->
+    </div>
+  </div>
+</div>
+
 <script>
 const TIER_ORDER = ["Consumer Grade", "Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"];
 const RARITY_COLORS = {
@@ -916,7 +645,6 @@ const RARITY_COLORS = {
   "Classified": "var(--rarity-classified)",
   "Covert": "var(--rarity-covert)"
 };
-
 const RARITY_HEX = {
   "Consumer Grade": "#b0c3d9",
   "Industrial Grade": "#5e98d9",
@@ -958,6 +686,9 @@ let slots = Array.from({ length: 10 }, () => ({
 let priceCache = window.LOCAL_PRICES || {};
 let activeOutcomes = [];
 let activeSlotDropdown = null;
+
+let currentTotalInputCost = 0; 
+let simStats = { runs: 0, wins: 0, losses: 0, profit: 0, hits: {} }; 
 
 function formatTimeAgo(dateInput) {
   if (!dateInput) return null;
@@ -1105,7 +836,7 @@ function applySplitPreset(primaryCount) {
 
   const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
   const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-  const sFloatDefault = parseFloat((sMin + (sMax - sMin) * 0.05).toFixed(4));
+  const sFloatDefault = parseFloat(((targetNormalized * (sMax - sMin)) + sMin).toFixed(4));
 
   const cur = getActiveCurrency();
 
@@ -1142,6 +873,7 @@ function applyMultiCheapestFiller() {
   const inputTier = TIER_ORDER[tierIdx - 1];
   const targetColl = selectedTarget.collections[0].name;
   const cur = getActiveCurrency();
+  const targetNormalized = getNormalizedTarget();
 
   const candidateFillers = allSkins.filter(s => 
     s.rarity && s.rarity.name === inputTier &&
@@ -1156,7 +888,7 @@ function applyMultiCheapestFiller() {
   candidateFillers.forEach(skin => {
     const sMin = skin.min_float ?? 0.00;
     const sMax = skin.max_float ?? 1.00;
-    const defaultFloat = sMin + (sMax - sMin) * 0.05;
+    const defaultFloat = sMin + (sMax - sMin) * targetNormalized; 
     const wear = getWearName(defaultFloat);
     const hash = getMarketHash(skin.name, wear);
     const priceUSD = priceCache[hash];
@@ -1186,7 +918,6 @@ function applyMultiCheapestFiller() {
   }
 
   const primarySkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
-  const targetNormalized = getNormalizedTarget();
   const pMin = primarySkin ? (primarySkin.min_float ?? 0.00) : 0;
   const pMax = primarySkin ? (primarySkin.max_float ?? 1.00) : 1;
   const pFloatDefault = parseFloat(((targetNormalized * (pMax - pMin)) + pMin).toFixed(4));
@@ -1205,7 +936,7 @@ function applyMultiCheapestFiller() {
       const fSkin = fillerEntry.skin;
       const fMin = fSkin.min_float ?? 0.00;
       const fMax = fSkin.max_float ?? 1.00;
-      const fFloat = parseFloat((fMin + (fMax - fMin) * 0.05).toFixed(4));
+      const fFloat = parseFloat(((targetNormalized * (fMax - fMin)) + fMin).toFixed(4));
       const fWear = getWearName(fFloat);
       const fHash = getMarketHash(fSkin.name, fWear);
       const fPriceUSD = priceCache[fHash];
@@ -1700,7 +1431,6 @@ function renderSlotCards(inputTier) {
     );
 
     const sMin = skin ? (skin.min_float ?? 0.00) : 0;
-    const sMax = skin ? (skin.max_float ?? 1.00) : 1;
     const craftHash = `#target=${encodeURIComponent(skin ? skin.name : '')}&wearMax=${slot.float}&wearMin=${sMin}&st=${isStatTrak ? "1" : "0"}`;
 
     const card = document.createElement("div");
@@ -1865,11 +1595,12 @@ function onIndividualSlotSkinChange(slotIndex, skinName) {
   if (!chosenSkin) return;
 
   const cur = getActiveCurrency();
+  const targetNormalized = getNormalizedTarget();
   slots[slotIndex].skin = chosenSkin;
 
   const sMin = chosenSkin.min_float ?? 0.00;
   const sMax = chosenSkin.max_float ?? 1.00;
-  slots[slotIndex].float = Math.max(sMin, Math.min(sMax, slots[slotIndex].float));
+  slots[slotIndex].float = parseFloat(((targetNormalized * (sMax - sMin)) + sMin).toFixed(4));
 
   const wear = getWearName(slots[slotIndex].float);
   const hash = getMarketHash(chosenSkin.name, wear);
@@ -1896,13 +1627,14 @@ function onFillerSkinDropdownChange(name) {
 
   const targetColl = selectedTarget.collections[0].name;
   const cur = getActiveCurrency();
+  const targetNormalized = getNormalizedTarget();
 
   slots.forEach((slot) => {
     if (slot.skin && slot.skin.collections[0].name !== targetColl) {
       slot.skin = secondarySkin;
       const sMin = secondarySkin ? (secondarySkin.min_float ?? 0.00) : 0;
       const sMax = secondarySkin ? (secondarySkin.max_float ?? 1.00) : 1;
-      slot.float = parseFloat((sMin + (sMax - sMin) * 0.05).toFixed(4));
+      slot.float = parseFloat(((targetNormalized * (sMax - sMin)) + sMin).toFixed(4));
       if (secondarySkin) {
         const sWear = getWearName(slot.float);
         const hash = getMarketHash(secondarySkin.name, sWear);
@@ -2122,6 +1854,8 @@ function updateFinancials() {
       totalCost += slot.price;
     }
   });
+  
+  currentTotalInputCost = totalCost; // Store for simulator
 
   const totalCostEl = document.getElementById("statInputCost");
   const evEl = document.getElementById("statEV");
@@ -2325,8 +2059,256 @@ function copyShareUrl() {
   navigator.clipboard.writeText(window.location.href).then(() => {
     const textEl = document.getElementById("shareBtnText");
     textEl.textContent = "✔ Copied!";
-    setTimeout(() => { textEl.textContent = "🔗 Copy Link"; }, 2000);
+    setTimeout(() => { textEl.textContent = "🔗 Link"; }, 2000);
   });
+}
+
+function toggleBinder() {
+  const panel = document.getElementById("binderPanel");
+  const overlay = document.getElementById("binderOverlay");
+  if (panel.classList.contains("open")) {
+    panel.classList.remove("open");
+    overlay.style.display = "none";
+  } else {
+    renderBinderList();
+    panel.classList.add("open");
+    overlay.style.display = "block";
+  }
+}
+
+function saveCurrentRecipe() {
+  if (!selectedTarget) return;
+  updateUrlHash();
+  const currentHash = window.location.hash;
+  if (!currentHash) return;
+
+  const saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]");
+  
+  const existingIdx = saved.findIndex(r => r.hash === currentHash);
+  if (existingIdx !== -1) {
+    saved.splice(existingIdx, 1);
+  }
+
+  const targetMax = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
+  const wearName = getWearName(targetMax - 0.0001);
+
+  const newRecipe = {
+    id: Date.now(),
+    name: selectedTarget.name,
+    wear: wearName,
+    st: isStatTrak,
+    hash: currentHash,
+    date: new Date().toLocaleDateString()
+  };
+
+  saved.unshift(newRecipe);
+  localStorage.setItem("CS2_SAVED_RECIPES", JSON.stringify(saved));
+
+  const btnText = document.getElementById("saveBinderText");
+  btnText.textContent = "✔ Saved!";
+  setTimeout(() => { btnText.textContent = "⭐ Save"; }, 2000);
+}
+
+function renderBinderList() {
+  const container = document.getElementById("binderContent");
+  const saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]");
+
+  if (saved.length === 0) {
+    container.innerHTML = `<div class="binder-empty">No saved recipes found.<br><br>Click the <b>⭐ Save</b> button on any setup to store it here.</div>`;
+    return;
+  }
+
+  container.innerHTML = "";
+  saved.forEach(recipe => {
+    const card = document.createElement("div");
+    card.className = "saved-card";
+    card.innerHTML = `
+      <div class="saved-card-title">${recipe.st ? 'StatTrak™ ' : ''}${recipe.name}</div>
+      <div class="saved-card-date">Target Wear: ${recipe.wear} &bull; Saved: ${recipe.date}</div>
+      <div class="saved-card-actions">
+        <div class="saved-btn-load" onclick="loadSavedRecipe('${recipe.hash}')">Load Setup</div>
+        <button class="saved-btn-del" onclick="deleteSavedRecipe(${recipe.id})" title="Delete">🗑️</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function loadSavedRecipe(hash) {
+  toggleBinder();
+  history.replaceState(null, "", hash);
+  checkUrlHashLoad();
+}
+
+function deleteSavedRecipe(id) {
+  let saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]");
+  saved = saved.filter(r => r.id !== id);
+  localStorage.setItem("CS2_SAVED_RECIPES", JSON.stringify(saved));
+  renderBinderList();
+}
+
+/* Virtual Contract Simulator Functions */
+function openSimulator() {
+  if (activeOutcomes.length === 0) return alert("No valid outcomes to simulate! Please fill your inputs.");
+  
+  let filledSlots = slots.filter(s => s.skin).length;
+  if (filledSlots < 10) return alert("You must fill all 10 slots before signing a contract.");
+
+  let hasMissingSlotPrice = slots.some(s => s.price === null || isNaN(s.price));
+  if (hasMissingSlotPrice) return alert("Ensure all 10 inputs have a price before simulating.");
+
+  // Reset session stats when opening the modal fresh
+  simStats = { runs: 0, wins: 0, losses: 0, profit: 0, hits: {} };
+
+  const overlay = document.getElementById("simulatorOverlay");
+  const revealBox = document.getElementById("simulatorReveal");
+  
+  revealBox.innerHTML = `
+    <div class="sim-prep-text">Contract Ready. Waiting for Signature...</div>
+    <button id="simulateActionBtn" class="sim-action-btn" onclick="executeSimulation()">Sign Contract</button>
+  `;
+  overlay.style.display = "flex";
+}
+
+function closeSimulator() {
+  document.getElementById("simulatorOverlay").style.display = "none";
+}
+
+function executeSimulation() {
+  const revealBox = document.getElementById("simulatorReveal");
+  
+  revealBox.innerHTML = `
+    <div class="sim-signing-container">
+        <div class="sim-signature"></div>
+    </div>
+    <div class="sim-status">Processing Trade-Up...</div>
+  `;
+
+  setTimeout(() => {
+    let roll = Math.random();
+    let cumulative = 0;
+    let wonEntry = activeOutcomes[activeOutcomes.length - 1]; // Fallback
+
+    for (let entry of activeOutcomes) {
+      cumulative += entry.probability;
+      if (roll <= cumulative) {
+        wonEntry = entry;
+        break;
+      }
+    }
+
+    // Record Hit for specific skin
+    simStats.hits[wonEntry.skin.name] = (simStats.hits[wonEntry.skin.name] || 0) + 1;
+
+    // Determine won float
+    let totalW = 0;
+    slots.forEach(slot => {
+      const sMin = slot.skin.min_float ?? 0.00;
+      const sMax = slot.skin.max_float ?? 1.00;
+      totalW += sMax !== sMin ? (slot.float - sMin) / (sMax - sMin) : 0;
+    });
+    const avgW = totalW / 10;
+    const oMin = wonEntry.skin.min_float ?? 0.00;
+    const oMax = wonEntry.skin.max_float ?? 1.00;
+    const outFloat = (avgW * (oMax - oMin)) + oMin;
+    const outWear = getWearName(outFloat);
+    
+    // Determine Profit
+    const feeMultiplier = parseFloat(document.getElementById("feeSelect").value);
+    const hashName = getMarketHash(wonEntry.skin.name, outWear);
+    const priceValUSD = priceCache[hashName];
+    const cur = getActiveCurrency();
+    const outPriceLocal = priceValUSD ? priceValUSD * cur.rate : 0;
+    const netProfit = (outPriceLocal * feeMultiplier) - currentTotalInputCost;
+    
+    // Update Session Stats
+    simStats.runs++;
+    if (netProfit >= 0) {
+      simStats.wins++;
+    } else {
+      simStats.losses++;
+    }
+    simStats.profit += netProfit;
+
+    let winRate = ((simStats.wins / simStats.runs) * 100).toFixed(1);
+    let totalPnlSign = simStats.profit >= 0 ? '+' : '';
+    let totalPnlClass = simStats.profit >= 0 ? 'green' : 'red';
+    
+    const isTarget = wonEntry.skin.name === selectedTarget.name;
+    const rarityColor = RARITY_COLORS[wonEntry.skin.rarity.name] || "#fff";
+    
+    let pnlClass = netProfit >= 0 ? 'sim-result-pnl' : 'sim-result-pnl loss';
+    let pnlSign = netProfit >= 0 ? '+' : '';
+
+    // Generate Outcome Distribution Grid
+    let groupedOutcomesMap = {};
+    activeOutcomes.forEach(entry => {
+        if (!groupedOutcomesMap[entry.skin.name]) {
+            groupedOutcomesMap[entry.skin.name] = { skin: entry.skin, probability: 0 };
+        }
+        groupedOutcomesMap[entry.skin.name].probability += entry.probability;
+    });
+    let groupedOutcomes = Object.values(groupedOutcomesMap).sort((a,b) => b.probability - a.probability);
+
+    let outcomesGridHtml = `<div class="sim-outcomes-header">Session Outcome Distribution</div><div class="sim-outcomes-grid">`;
+    groupedOutcomes.forEach(entry => {
+        let hitCount = simStats.hits[entry.skin.name] || 0;
+        let rarityHex = RARITY_HEX[entry.skin.rarity.name] || "#fff";
+        let hitClass = hitCount > 0 ? 'hit' : '';
+        let badgeClass = hitCount > 0 ? '' : 'zero';
+        
+        outcomesGridHtml += `
+            <div class="sim-outcome-mini-card ${hitClass}" style="${hitCount > 0 ? `border-bottom: 2px solid ${rarityHex}` : ''}" title="${entry.skin.name} (${(entry.probability*100).toFixed(1)}%)">
+                <div class="sim-hit-badge ${badgeClass}">${hitCount}</div>
+                <img class="sim-outcome-thumb" src="${entry.skin.image || ''}" alt="">
+            </div>
+        `;
+    });
+    outcomesGridHtml += `</div>`;
+
+    revealBox.innerHTML = `
+      <div class="sim-result-box">
+        <div class="sim-result-title" style="color: ${rarityColor}">Contract Executed</div>
+        <img class="sim-result-thumb" src="${wonEntry.skin.image || ''}" alt="">
+        <div class="sim-result-name">${isStatTrak ? 'StatTrak™ ' : ''}${wonEntry.skin.name}</div>
+        <div class="sim-result-details">
+          <span>${outWear} &bull; Float: ${outFloat.toFixed(4)}</span>
+          ${isTarget ? '<span style="color: var(--accent-green); font-weight: 700; margin-top: 4px;">TARGET ACQUIRED!</span>' : ''}
+        </div>
+        <div class="${pnlClass}">${pnlSign}${formatMoney(netProfit)}</div>
+        
+        <div style="display: flex; gap: 10px; width: 100%; margin-top: 25px;">
+            <button class="sim-action-btn" style="flex: 1; padding: 12px; font-size: 14px;" onclick="executeSimulation()">🔄 Simulate Again</button>
+            <button class="action-btn" style="flex: 1; border-color: var(--border-color); height: auto;" onclick="closeSimulator()">Close</button>
+        </div>
+
+        <div class="sim-stats-container">
+            <div class="sim-stat-box">
+                <span class="sim-stat-lbl">Runs</span>
+                <span class="sim-stat-val">${simStats.runs}</span>
+            </div>
+            <div class="sim-stat-box">
+                <span class="sim-stat-lbl">Wins</span>
+                <span class="sim-stat-val green">${simStats.wins}</span>
+            </div>
+            <div class="sim-stat-box">
+                <span class="sim-stat-lbl">Losses</span>
+                <span class="sim-stat-val red">${simStats.losses}</span>
+            </div>
+            <div class="sim-stat-box">
+                <span class="sim-stat-lbl">Win %</span>
+                <span class="sim-stat-val gold">${winRate}%</span>
+            </div>
+            <div class="sim-stat-box" style="flex: 100%; max-width: 100%; margin-top: 4px; padding: 10px;">
+                <span class="sim-stat-lbl">Session Net Profit / Loss</span>
+                <span class="sim-stat-val ${totalPnlClass}" style="font-size: 15px;">${totalPnlSign}${formatMoney(simStats.profit)}</span>
+            </div>
+        </div>
+        
+        ${outcomesGridHtml}
+      </div>
+    `;
+  }, 2600);
 }
 
 document.addEventListener("click", function(e) {
