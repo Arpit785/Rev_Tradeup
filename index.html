@@ -324,9 +324,9 @@
       color: var(--text-muted);
       letter-spacing: 0.5px;
     }
-    .slot-csfloat-link {
+    .slot-steam-link {
       font-size: 10px;
-      color: var(--accent-csfloat);
+      color: #66c0f4;
       text-decoration: none;
       font-weight: 700;
       display: inline-flex;
@@ -334,7 +334,22 @@
       gap: 2px;
       transition: color 0.15s;
     }
-    .slot-csfloat-link:hover {
+    .slot-steam-link:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    .slot-slot-craft-link {
+      font-size: 10px;
+      color: var(--accent-green);
+      text-decoration: none;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      transition: color 0.15s;
+    }
+    .slot-slot-craft-link:hover {
       color: #fff;
       text-decoration: underline;
     }
@@ -852,7 +867,7 @@
       <div id="eligibleList" class="items-list"></div>
     </div>
 
-    <!-- 10 Individual Slots Section with Quick Fill & Cheapest Filler Button -->
+    <!-- 10 Individual Slots Section with Multi-Skin Diverse Filler Distribution & Craft Links -->
     <div id="recipeContainer">
       <div class="section-title">
         <span>Trade-Up Input Items (10 Individual Slots)</span>
@@ -862,7 +877,7 @@
           <button type="button" class="preset-btn" data-count="8" onclick="applySplitPreset(8)">8x2</button>
           <button type="button" class="preset-btn" data-count="5" onclick="applySplitPreset(5)">5x5</button>
           <button type="button" class="preset-btn" data-count="1" onclick="applySplitPreset(1)">1x9</button>
-          <button type="button" class="auto-suggest-btn" onclick="applyCheapestFiller()" title="Automatically fill open filler slots with the cheapest suggestion">⚡ Fill Cheapest Suggestions</button>
+          <button type="button" class="auto-suggest-btn" onclick="applyMultiCheapestFiller()" title="Distribute top 4 cheapest diverse fillers across slots">⚡ Fill Cheapest Suggestions</button>
         </div>
       </div>
 
@@ -1120,8 +1135,7 @@ function applySplitPreset(primaryCount) {
   updateUrlHash();
 }
 
-/* Direct Cheapest Filler Auto-Suggester */
-function applyCheapestFiller() {
+function applyMultiCheapestFiller() {
   if (!selectedTarget) return;
   const tierIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
   if (tierIdx <= 0) return;
@@ -1138,9 +1152,7 @@ function applyCheapestFiller() {
 
   if (candidateFillers.length === 0) return;
 
-  let cheapestSkin = candidateFillers[0];
-  let cheapestPriceUSD = Infinity;
-
+  const pricedFillers = [];
   candidateFillers.forEach(skin => {
     const sMin = skin.min_float ?? 0.00;
     const sMax = skin.max_float ?? 1.00;
@@ -1148,32 +1160,64 @@ function applyCheapestFiller() {
     const wear = getWearName(defaultFloat);
     const hash = getMarketHash(skin.name, wear);
     const priceUSD = priceCache[hash];
-
     if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD)) {
-      if (priceUSD < cheapestPriceUSD) {
-        cheapestPriceUSD = priceUSD;
-        cheapestSkin = skin;
-      }
+      pricedFillers.push({ skin, priceUSD, defaultFloat });
     }
   });
 
-  secondarySkin = cheapestSkin;
-  const sMin = secondarySkin.min_float ?? 0.00;
-  const sMax = secondarySkin.max_float ?? 1.00;
-  const sFloatDefault = parseFloat((sMin + (sMax - sMin) * 0.05).toFixed(4));
-  const sWear = getWearName(sFloatDefault);
-  const sHash = getMarketHash(secondarySkin.name, sWear);
-  const sPriceUSD = priceCache[sHash];
-  const sPriceLocal = sPriceUSD !== undefined && sPriceUSD !== null ? parseFloat((sPriceUSD * cur.rate).toFixed(2)) : null;
+  pricedFillers.sort((a, b) => a.priceUSD - b.priceUSD);
 
-  slots.forEach(slot => {
-    if (slot.skin && slot.skin.collections[0].name !== targetColl) {
-      slot.skin = secondarySkin;
-      slot.float = sFloatDefault;
-      slot.price = sPriceLocal;
+  const topFillers = [];
+  const seenNames = new Set();
+  for (const item of pricedFillers) {
+    if (!seenNames.has(item.skin.name)) {
+      seenNames.add(item.skin.name);
+      topFillers.push(item);
+      if (topFillers.length >= 4) break;
     }
-  });
+  }
 
+  if (topFillers.length === 0) return;
+  secondarySkin = topFillers[0].skin;
+
+  let primaryCount = slots.filter(s => s.skin && s.skin.collections[0].name === targetColl).length;
+  if (primaryCount >= 10 || primaryCount === 0) {
+    primaryCount = 1; 
+  }
+
+  const primarySkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
+  const targetNormalized = getNormalizedTarget();
+  const pMin = primarySkin ? (primarySkin.min_float ?? 0.00) : 0;
+  const pMax = primarySkin ? (primarySkin.max_float ?? 1.00) : 1;
+  const pFloatDefault = parseFloat(((targetNormalized * (pMax - pMin)) + pMin).toFixed(4));
+  const pWear = getWearName(pFloatDefault);
+  const pHash = getMarketHash(primarySkin.name, pWear);
+  const pPriceUSD = priceCache[pHash];
+  const pPriceLocal = pPriceUSD !== undefined && pPriceUSD !== null ? parseFloat((pPriceUSD * cur.rate).toFixed(2)) : null;
+
+  for (let i = 0; i < 10; i++) {
+    if (i < primaryCount) {
+      slots[i].skin = primarySkin;
+      slots[i].float = pFloatDefault;
+      slots[i].price = pPriceLocal;
+    } else {
+      const fillerEntry = topFillers[(i - primaryCount) % topFillers.length];
+      const fSkin = fillerEntry.skin;
+      const fMin = fSkin.min_float ?? 0.00;
+      const fMax = fSkin.max_float ?? 1.00;
+      const fFloat = parseFloat((fMin + (fMax - fMin) * 0.05).toFixed(4));
+      const fWear = getWearName(fFloat);
+      const fHash = getMarketHash(fSkin.name, fWear);
+      const fPriceUSD = priceCache[fHash];
+      const fPriceLocal = fPriceUSD !== undefined && fPriceUSD !== null ? parseFloat((fPriceUSD * cur.rate).toFixed(2)) : null;
+
+      slots[i].skin = fSkin;
+      slots[i].float = fFloat;
+      slots[i].price = fPriceLocal;
+    }
+  }
+
+  updatePresetButtons();
   renderSlotCards(inputTier);
   computeAndRenderOutcomes(inputTier);
   updateUrlHash();
@@ -1220,83 +1264,67 @@ function targetRarity(s) {
 }
 
 async function loadSkins() {
+  const statusEl = document.getElementById("status");
+  if (statusEl) statusEl.textContent = "Checking local browser cache...";
+
+  const cachedData = localStorage.getItem("CS2_SKINS_DB");
+  if (cachedData) {
+    try {
+      const data = JSON.parse(cachedData);
+      processLoadedSkins(data);
+      return;
+    } catch (e) {
+      localStorage.removeItem("CS2_SKINS_DB");
+    }
+  }
+
+  if (statusEl) statusEl.textContent = "Downloading skin database...";
   const endpoints = [
-    "https://bymykel.github.io/CSGO-API/api/en/skins.json",
     "https://raw.githubusercontent.com/ByMyKel/CSGO-API/main/public/api/en/skins.json",
+    "https://bymykel.github.io/CSGO-API/api/en/skins.json",
     "https://cdn.jsdelivr.net/gh/ByMyKel/CSGO-API@main/public/api/en/skins.json"
   ];
 
-  const statusEl = document.getElementById("status");
-  const timeoutMs = 10000;
-
-  if (statusEl) statusEl.textContent = "Connecting to skin database...";
-
-  const fetchMirror = async (url) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
+  for (const url of endpoints) {
     try {
-      const response = await fetch(url, {
-        method: "GET",
-        mode: "cors",
-        cache: "no-store",
-        signal: controller.signal,
-        headers: { "Accept": "application/json" }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
+      const response = await fetch(url, { mode: "cors", cache: "no-store" });
+      if (!response.ok) continue;
       const data = await response.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error("Invalid or empty skin database");
+      if (Array.isArray(data) && data.length > 0) {
+        localStorage.setItem("CS2_SKINS_DB", JSON.stringify(data));
+        processLoadedSkins(data);
+        return;
       }
-
-      return { url, data };
-    } finally {
-      clearTimeout(timer);
+    } catch (err) {
+      console.warn("Endpoint failed:", url);
     }
-  };
-
-  try {
-    const result = await Promise.any(endpoints.map(fetchMirror));
-    const data = result.data;
-
-    allSkins = data;
-    validTargetSkins = data.filter(s =>
-      s &&
-      s.rarity &&
-      ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) &&
-      Array.isArray(s.collections) &&
-      s.collections.length > 0 &&
-      s.min_float !== null && s.min_float !== undefined &&
-      s.max_float !== null && s.max_float !== undefined
-    );
-
-    if (validTargetSkins.length === 0) {
-      throw new Error("Database loaded but contained no valid trade-up skins");
-    }
-
-    const priceCount = Object.keys(priceCache || {}).length;
-    if (statusEl) {
-      statusEl.textContent = `Ready: ${validTargetSkins.length} skins & ${priceCount.toLocaleString()} prices loaded.`;
-      statusEl.title = `Database source: ${result.url}`;
-    }
-
-    updatePriceTimestampDisplay();
-    checkUrlHashLoad();
-  } catch (error) {
-    console.error("Unable to load CS2 skin database from any mirror:", error);
-    if (statusEl) {
-      statusEl.textContent = "Failed to load skin database. Retrying...";
-      statusEl.title = "All skin database mirrors failed or timed out.";
-    }
-
-    setTimeout(() => {
-      if (allSkins.length === 0) loadSkins();
-    }, 3000);
   }
+
+  if (statusEl) {
+    statusEl.textContent = "Failed to load database. Check internet connection.";
+  }
+}
+
+function processLoadedSkins(data) {
+  allSkins = data;
+  validTargetSkins = data.filter(s =>
+    s &&
+    s.rarity &&
+    ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) &&
+    Array.isArray(s.collections) &&
+    s.collections.length > 0 &&
+    s.min_float !== null && s.min_float !== undefined &&
+    s.max_float !== null && s.max_float !== undefined
+  );
+
+  const statusEl = document.getElementById("status");
+  const priceCount = Object.keys(priceCache || {}).length;
+  if (statusEl) {
+    statusEl.textContent = `Ready: ${validTargetSkins.length} skins & ${priceCount.toLocaleString()} prices loaded.`;
+  }
+
+  updatePriceTimestampDisplay();
+  checkUrlHashLoad();
 }
 
 loadSkins();
@@ -1620,7 +1648,6 @@ function onEligiblePriceChange(index, val) {
   updateUrlHash();
 }
 
-/* 10 Individual Slot Cards Rendering with Searchable Popover Dropdown */
 function renderSlotCards(inputTier) {
   const container = document.getElementById("slotsGrid");
   container.innerHTML = "";
@@ -1640,17 +1667,18 @@ function renderSlotCards(inputTier) {
   const targetTierInputs = allEligibleSkinsOfTier.filter(s => s.collections[0].name === targetColl);
   const otherTierInputs = allEligibleSkinsOfTier.filter(s => s.collections[0].name !== targetColl);
 
-  // Update batch primary dropdown
   const pSelect = document.getElementById("primarySkinSelect");
   pSelect.innerHTML = targetCollInputs.map((s, idx) => 
     `<option value="${idx}" ${idx === selectedPrimaryIndex ? "selected" : ""}>${s.name}</option>`
   ).join("");
 
-  // Update batch filler dropdown
   const fSelect = document.getElementById("fillerSkinSelect");
   fSelect.innerHTML = otherTierInputs.map(s => 
     `<option value="${s.name}" ${secondarySkin && s.name === secondarySkin.name ? "selected" : ""}>${s.name} (${s.collections[0].name})</option>`
   ).join("");
+
+  const lowerTierIndex = TIER_ORDER.indexOf(inputTier) - 1;
+  const lowerTierName = lowerTierIndex >= 0 ? TIER_ORDER[lowerTierIndex] : null;
 
   slots.forEach((slot, i) => {
     const skin = slot.skin || primarySkin;
@@ -1663,7 +1691,17 @@ function renderSlotCards(inputTier) {
     const rarityHex = RARITY_HEX[skinRarity] || RARITY_HEX[inputTier] || "#4b69ff";
 
     const hashName = skin ? getMarketHash(skin.name, wearName) : "";
-    const slotCSFloatUrl = skin ? getCSFloatSearchUrl(hashName, skin.min_float ?? 0, slot.float) : "#";
+    const slotSteamUrl = skin ? getSteamMarketUrl(hashName) : "#";
+
+    const skinCollName = skin ? skin.collections[0]?.name : "";
+    const canCraftThisSkin = lowerTierName && allSkins.some(s => 
+      s.collections && s.collections.some(c => c.name === skinCollName) &&
+      s.rarity && s.rarity.name === lowerTierName
+    );
+
+    const sMin = skin ? (skin.min_float ?? 0.00) : 0;
+    const sMax = skin ? (skin.max_float ?? 1.00) : 1;
+    const craftHash = `#target=${encodeURIComponent(skin ? skin.name : '')}&wearMax=${slot.float}&wearMin=${sMin}&st=${isStatTrak ? "1" : "0"}`;
 
     const card = document.createElement("div");
     card.className = `slot-card ${isTargetColl ? 'is-target-coll' : 'is-other-coll'}`;
@@ -1700,9 +1738,14 @@ function renderSlotCards(inputTier) {
         <div style="display: flex; align-items: center; gap: 6px;">
           <span class="slot-num-badge">SLOT #${i + 1}</span>
           ${skin ? `
-            <a href="${slotCSFloatUrl}" target="_blank" class="slot-csfloat-link" title="Find this exact float target on CSFloat">
-              CSFloat ↗
+            <a href="${slotSteamUrl}" target="_blank" class="slot-steam-link" title="View floor price on Steam Market">
+              Steam ↗
             </a>
+            ${canCraftThisSkin ? `
+              <a href="${craftHash}" target="_blank" class="slot-slot-craft-link" title="Open trade-up to craft this skin">
+                Trade-Up ↗
+              </a>
+            ` : ''}
           ` : ''}
         </div>
         <span class="badge ${isTargetColl ? 'badge-best' : 'badge-secondary'}">${isTargetColl ? 'Primary' : 'Filler'}</span>
@@ -1712,7 +1755,6 @@ function renderSlotCards(inputTier) {
         <img class="slot-thumb" id="slot-thumb-${i}" src="${skin ? (skin.image || '') : ''}" alt="" onerror="this.style.display='none'">
       </div>
 
-      <!-- Searchable Dropdown Button (Height: 38px) -->
       <div class="slot-picker-wrap" id="slot-picker-wrap-${i}">
         <button type="button" class="slot-picker-btn" id="slot-btn-${i}" onclick="toggleSlotDropdown(${i}, event)">
           <span class="slot-picker-text" id="slot-text-${i}">${skin ? skin.name : 'Choose Skin'}</span>
@@ -1731,7 +1773,6 @@ function renderSlotCards(inputTier) {
 
       <div class="slot-skin-coll" id="slot-coll-${i}">${skin && skin.collections[0] ? skin.collections[0].name : ''}</div>
 
-      <!-- Mini Wear Color Bar -->
       <div class="slot-wear-bar-box">
         <div class="slot-wear-bar">
           <div class="wear-seg-fn"></div>
