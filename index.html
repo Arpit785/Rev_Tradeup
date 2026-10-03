@@ -6,18 +6,22 @@
   <title>CS2 Trade-Up Terminal & Profit Analyzer</title>
   
   <link rel="stylesheet" href="style.css">
-  <script src="prices.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <script>window.LOCAL_PRICES = {};</script>
+  <script id="prices-script-tag" src="prices.js" onerror="console.log('Local prices.js not found, relying on IndexedDB cache.')"></script>
 </head>
 <body>
 
 <div class="container">
-  <div class="header">
+  <div class="header" data-html2canvas-ignore="true">
     <div class="header-content">
       <div class="header-tag">PRECISION REVERSE ENGINE</div>
       <div class="header-title">CS2 Trade-Up Terminal & Profit Analyzer</div>
       <div class="status-row">
-        <span id="status" class="status-badge">Connecting to skin database...</span>
+        <span id="status" class="status-badge">Mounting Local Database...</span>
         <span id="priceTimestampBadge" class="time-badge" style="display: none;"></span>
+        <button id="syncDataBtn" class="sync-btn" onclick="forceDatabaseSync()" title="Force download latest market prices and skins" style="display: none;">🔄 Sync</button>
       </div>
     </div>
     <div class="header-actions">
@@ -26,6 +30,9 @@
         <option value="USD">USD ($)</option>
         <option value="EUR">EUR (€)</option>
       </select>
+      <button class="home-btn" style="color: var(--accent-cyan); border-color: var(--border-color);" onclick="window.open('collection.html?cur=' + document.getElementById('currencySelect').value, '_blank')" title="Browse all collections and cases">
+        <span>📚 Collections</span>
+      </button>
       <button class="home-btn" style="color: var(--accent-gold); border-color: var(--border-color);" onclick="toggleBinder()" title="Open Saved Recipes Binder">
         <span>⭐ Binder</span>
       </button>
@@ -39,8 +46,10 @@
     <div class="control-group-top">
       <div class="search-wrapper">
         <label for="skinInput">Search Target Outcome Skin</label>
-        <input type="text" id="skinInput" placeholder="Type weapon or pattern (e.g. Printstream, Asiimov, Neo-Noir)..." autocomplete="off" oninput="handleSearch(this.value)" onfocus="handleSearch(this.value)">
-        <div id="dropdownResults" class="dropdown-results"></div>
+        <div style="position: relative;">
+          <input type="text" id="skinInput" placeholder="Type weapon or pattern (e.g. Printstream, Asiimov, Neo-Noir)..." autocomplete="off" oninput="handleSearch(this.value)" onfocus="handleSearch(this.value)">
+          <div id="dropdownResults" class="dropdown-results"></div>
+        </div>
       </div>
 
       <div class="wear-rating-box">
@@ -102,7 +111,7 @@
         </select>
       </div>
 
-      <div>
+      <div data-html2canvas-ignore="true">
         <label>Recipe Actions</label>
         <div style="display: flex; gap: 6px;">
           <button id="saveBinderBtn" class="action-btn" style="color: var(--accent-gold); flex: 1;" onclick="saveCurrentRecipe()" title="Save this setup to your local Binder">
@@ -111,17 +120,58 @@
           <button id="shareBtn" class="action-btn" style="color: var(--accent-cyan); flex: 1;" onclick="copyShareUrl()" title="Copy URL to clipboard">
             <span id="shareBtnText">🔗 Link</span>
           </button>
+          <button id="exportBtn" class="action-btn" style="color: #a855f7; flex: 1;" onclick="exportRecipe()" title="Export Recipe as Image">
+            <span id="exportBtnText">📷 Export</span>
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="resultSection" class="result-section">
+  <!-- The 10 Sandbox Slots are now permanently visible on load -->
+  <div id="recipeContainer" style="margin-top: 14px;">
+    <div class="section-title" onclick="toggleSection('recipeWrapper', 'chevRecipe')">
+      <span>Trade-Up Input Items (10 Slots) <span class="chevron" id="chevRecipe">▼</span></span>
+      <div class="preset-container" onclick="event.stopPropagation()">
+        <span class="preset-label">Quick Fill:</span>
+        <button type="button" class="preset-btn active" data-count="10" onclick="applySplitPreset(10)">10x0</button>
+        <button type="button" class="preset-btn" data-count="8" onclick="applySplitPreset(8)">8x2</button>
+        <button type="button" class="preset-btn" data-count="5" onclick="applySplitPreset(5)">5x5</button>
+        <button type="button" class="preset-btn" data-count="1" onclick="applySplitPreset(1)">1x9</button>
+        <button type="button" class="auto-suggest-btn" onclick="applyMultiCheapestFiller()" title="Distribute top 4 cheapest diverse fillers across slots">⚡ Fill Cheapest</button>
+        <div class="budget-wrap">
+          <input type="number" id="budgetInput" class="budget-input" placeholder="Max Cost..." title="Target total budget">
+          <button type="button" class="auto-suggest-btn" style="margin-left: 0;" onclick="applyBudgetFiller()" title="Fill remaining slots without exceeding max cost">🎯 Budget Fill</button>
+        </div>
+        <button type="button" class="preset-btn btn-clear-all" onclick="clearAllSlots()" title="Clear all slots and reset to sandbox mode">🗑 Clear All</button>
+      </div>
+    </div>
+
+    <div id="recipeWrapper">
+      <div class="slots-config-header" id="batchConfigPanel" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
+          <span class="badge badge-best">Batch Primary:</span>
+          <select id="primarySkinSelect" style="padding: 5px 8px; font-size: 12px; font-weight: 700;" onchange="onPrimarySkinDropdownChange(parseInt(this.value))"></select>
+        </div>
+        <div id="fillerConfigWrapper" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
+          <span class="badge badge-secondary">Batch Filler:</span>
+          <select id="fillerSkinSelect" style="padding: 5px 8px; font-size: 12px; font-weight: 700;" onchange="onFillerSkinDropdownChange(this.value)"></select>
+        </div>
+      </div>
+      <div id="slotsGrid" class="slots-grid"></div>
+    </div>
+  </div>
+
+  <div id="resultSection" class="result-section" style="margin-top: 14px; display: none;">
     <div id="uncraftableNotice" class="notice-card" style="display: none;"></div>
 
     <div class="collection-breakdown-box">
-      <div class="collection-breakdown-title">Collections in Trade-Up</div>
-      <div id="collectionsListText"></div>
+      <div class="collection-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="collection-breakdown-title">Active Collections</div>
+        <button id="validFillersToggleBtn" class="collection-action-btn" style="background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); border-radius: 4px; padding: 4px 10px; font-size: 9px; font-weight: 800; cursor: pointer; text-transform: uppercase;" onclick="toggleValidCollections()">🔎 Valid Fillers</button>
+      </div>
+      <div id="collectionsListText" class="active-coll-grid"></div>
+      <div id="validCollectionsList" class="valid-collections-dropdown"></div>
     </div>
 
     <div class="financial-grid" id="mainFinancialGrid">
@@ -181,7 +231,7 @@
 
     <div id="eligibleContainer">
       <div class="section-title" onclick="toggleSection('eligibleWrapper', 'chevEligible')">
-        <span>Eligible Input Skins <span class="chevron" id="chevEligible">▼</span></span>
+        <span>Eligible Target Skins <span class="chevron" id="chevEligible">▼</span></span>
         <span style="font-size: 11px; text-transform: none; color: var(--text-muted);">Click card to select &bull; Open trade-up in new tab with Trade-Up ↗</span>
       </div>
       <div id="eligibleWrapper">
@@ -189,40 +239,7 @@
       </div>
     </div>
 
-    <div id="recipeContainer">
-      <div class="section-title" onclick="toggleSection('recipeWrapper', 'chevRecipe')">
-        <span>Trade-Up Input Items (10 Slots) <span class="chevron" id="chevRecipe">▼</span></span>
-        <div class="preset-container" onclick="event.stopPropagation()">
-          <span class="preset-label">Quick Fill:</span>
-          <button type="button" class="preset-btn active" data-count="10" onclick="applySplitPreset(10)">10x0</button>
-          <button type="button" class="preset-btn" data-count="8" onclick="applySplitPreset(8)">8x2</button>
-          <button type="button" class="preset-btn" data-count="5" onclick="applySplitPreset(5)">5x5</button>
-          <button type="button" class="preset-btn" data-count="1" onclick="applySplitPreset(1)">1x9</button>
-          <button type="button" class="auto-suggest-btn" onclick="applyMultiCheapestFiller()" title="Distribute top 4 cheapest diverse fillers across slots">⚡ Fill Cheapest</button>
-          <div class="budget-wrap">
-            <input type="number" id="budgetInput" class="budget-input" placeholder="Max Cost..." title="Target total budget">
-            <button type="button" class="auto-suggest-btn" style="margin-left: 0;" onclick="applyBudgetFiller()" title="Fill remaining slots without exceeding max cost">🎯 Budget Fill</button>
-          </div>
-          <button type="button" class="preset-btn btn-clear-all" onclick="clearAllSlots()" title="Clear all slots and reset floats">🗑 Clear All</button>
-        </div>
-      </div>
-
-      <div id="recipeWrapper">
-        <div class="slots-config-header">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
-            <span class="badge badge-best">Batch Primary:</span>
-            <select id="primarySkinSelect" style="padding: 5px 8px; font-size: 12px; font-weight: 700;" onchange="onPrimarySkinDropdownChange(parseInt(this.value))"></select>
-          </div>
-          <div id="fillerConfigWrapper" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
-            <span class="badge badge-secondary">Batch Filler:</span>
-            <select id="fillerSkinSelect" style="padding: 5px 8px; font-size: 12px; font-weight: 700;" onchange="onFillerSkinDropdownChange(this.value)"></select>
-          </div>
-        </div>
-        <div id="slotsGrid" class="slots-grid"></div>
-      </div>
-    </div>
-
-    <button class="sign-contract-btn" onclick="openSimulator()">✍️ Sign Contract (Simulate Roll)</button>
+    <button class="sign-contract-btn" onclick="openSimulator()" data-html2canvas-ignore="true">✍️ Sign Contract (Simulate Roll)</button>
 
     <div id="outcomesContainer">
       <div class="section-title" onclick="toggleSection('outcomesWrapper', 'chevOutcomes')">
@@ -244,7 +261,7 @@
 </div>
 
 <div id="binderOverlay" class="binder-overlay" onclick="toggleBinder()"></div>
-<div id="binderPanel" class="binder-panel">
+<div id="binderPanel" class="binder-panel" data-html2canvas-ignore="true">
   <div class="binder-header">
     <div class="binder-title">⭐ Saved Recipes</div>
     <button class="binder-close" onclick="toggleBinder()">&times;</button>
@@ -252,14 +269,14 @@
   <div id="binderContent" class="binder-content"></div>
 </div>
 
-<div id="simulatorOverlay" class="sim-overlay">
+<div id="simulatorOverlay" class="sim-overlay" data-html2canvas-ignore="true">
   <div class="sim-modal">
     <button class="sim-close" onclick="closeSimulator()">&times;</button>
     <div id="simulatorReveal"></div>
   </div>
 </div>
 
-<div id="stickyFooter" class="sticky-footer">
+<div id="stickyFooter" class="sticky-footer" data-html2canvas-ignore="true">
   <div class="sticky-footer-content">
     <div class="sticky-stats">
       <div class="sticky-stat"><span class="sticky-label">Cost:</span> <span id="stickyCost">₹0.00</span></div>

@@ -1,115 +1,231 @@
 // ============================================================================
 // 1. GLOBAL VARIABLES & STATE
 // ============================================================================
+const DB_NAME = 'CS2TradeUpDB';
+const DB_VERSION = 1;
+
 const TIER_ORDER = ["Consumer Grade", "Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"];
-const RARITY_COLORS = {
-  "Industrial Grade": "var(--rarity-industrial)",
-  "Mil-Spec Grade": "var(--rarity-milspec)",
-  "Restricted": "var(--rarity-restricted)",
-  "Classified": "var(--rarity-classified)",
-  "Covert": "var(--rarity-covert)"
-};
-const RARITY_HEX = {
-  "Consumer Grade": "#b0c3d9",
-  "Industrial Grade": "#5e98d9",
-  "Mil-Spec Grade": "#4b69ff",
-  "Restricted": "#8847ff",
-  "Classified": "#d32ce6",
-  "Covert": "#eb4b4b"
-};
-const CURRENCIES = {
-  INR: { symbol: "₹", rate: 88.0 },
-  USD: { symbol: "$", rate: 1.0 },
-  EUR: { symbol: "€", rate: 0.92 }
-};
-const WEAR_RANGES = {
-  FN: { min: 0.00, max: 0.07 },
-  MW: { min: 0.07, max: 0.15 },
-  FT: { min: 0.15, max: 0.38 },
-  WW: { min: 0.38, max: 0.45 },
-  BS: { min: 0.45, max: 1.00 }
-};
+const RARITY_COLORS = { "Industrial Grade": "var(--rarity-industrial)", "Mil-Spec Grade": "var(--rarity-milspec)", "Restricted": "var(--rarity-restricted)", "Classified": "var(--rarity-classified)", "Covert": "var(--rarity-covert)" };
+const RARITY_HEX = { "Consumer Grade": "#b0c3d9", "Industrial Grade": "#5e98d9", "Mil-Spec Grade": "#4b69ff", "Restricted": "#8847ff", "Classified": "#d32ce6", "Covert": "#eb4b4b" };
+const CURRENCIES = { INR: { symbol: "₹", rate: 88.0 }, USD: { symbol: "$", rate: 1.0 }, EUR: { symbol: "€", rate: 0.92 } };
+const WEAR_RANGES = { FN: { min: 0.00, max: 0.07 }, MW: { min: 0.07, max: 0.15 }, FT: { min: 0.15, max: 0.38 }, WW: { min: 0.38, max: 0.45 }, BS: { min: 0.45, max: 1.00 } };
 
-let allSkins = [];
-let validTargetSkins = [];
-let selectedTarget = null;
-let isStatTrak = false;
-let targetCollInputs = [];
-let selectedPrimaryIndex = 0;
-let secondarySkin = null;
-
-let slots = Array.from({ length: 10 }, () => ({
-  skin: null,
-  float: 0.05,
-  price: null
-}));
-
-let priceCache = window.LOCAL_PRICES || {};
-let activeOutcomes = [];
-let activeSlotDropdown = null;
-let currentTotalInputCost = 0; 
-let simStats = { runs: 0, wins: 0, losses: 0, profit: 0, invested: 0, hits: {} }; 
-let currentSimBatchSize = 1;
-
+let allSkins = [], validTargetSkins = [], selectedTarget = null, sandboxTier = null, isStatTrak = false, targetCollInputs = [], selectedPrimaryIndex = 0, secondarySkin = null;
+let slots = Array.from({ length: 10 }, () => ({ skin: null, float: 0.05, price: null }));
+let priceCache = {};
+let activeOutcomes = [], activeSlotDropdown = null, currentTotalInputCost = 0; 
+let simStats = { runs: 0, wins: 0, losses: 0, profit: 0, invested: 0, hits: {} }, currentSimBatchSize = 1;
 
 // ============================================================================
-// 2. INITIALIZATION & DATABASE LOADING
+// 2. NATIVE INDEXED_DB WRAPPER
 // ============================================================================
-if (document.readyState === 'loading') { 
-    document.addEventListener('DOMContentLoaded', initApp); 
-} else { 
-    initApp(); 
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('skins')) db.createObjectStore('skins');
+            if (!db.objectStoreNames.contains('prices')) db.createObjectStore('prices');
+            if (!db.objectStoreNames.contains('recipes')) db.createObjectStore('recipes');
+            if (!db.objectStoreNames.contains('sim_history')) db.createObjectStore('sim_history');
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
 }
 
-function initApp() {
-    loadSkins();
+async function dbPut(storeName, key, value) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const req = key ? tx.objectStore(storeName).put(value, key) : tx.objectStore(storeName).put(value);
+        req.onsuccess = () => resolve(); req.onerror = () => reject(req.error);
+    });
+}
+
+async function dbGet(storeName, key) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const req = tx.objectStore(storeName).get(key);
+        req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
+    });
+}
+
+// ============================================================================
+// 3. OFFLINE-FIRST DATA LOADING & LIVE SYNC
+// ============================================================================
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
+
+async function initApp() {
     setupStickyFooter();
+    await loadPrices();
+    await loadSkins();
 }
 
 async function loadSkins() {
     const statusEl = document.getElementById("status");
-    if (statusEl) statusEl.textContent = "Checking local browser cache...";
+    if (statusEl) statusEl.textContent = "Mounting Offline Database...";
+    
     try {
-        const cachedData = localStorage.getItem("CS2_SKINS_DB");
-        if (cachedData) {
-            const parsed = JSON.parse(cachedData);
-            if (Array.isArray(parsed) && parsed.length > 0) { processLoadedSkins(parsed); return; }
+        const cachedSkins = await dbGet('skins', 'master');
+        if (cachedSkins && Array.isArray(cachedSkins) && cachedSkins.length > 0) {
+            processLoadedSkins(cachedSkins);
+            return; 
         }
-    } catch (e) { localStorage.removeItem("CS2_SKINS_DB"); }
+    } catch (e) { console.warn("Skins DB read failed", e); }
 
-    if (statusEl) statusEl.textContent = "Downloading skin database...";
-    const endpoints = ["https://raw.githubusercontent.com/ByMyKel/CSGO-API/main/public/api/en/skins.json", "https://bymykel.github.io/CSGO-API/api/en/skins.json", "https://cdn.jsdelivr.net/gh/ByMyKel/CSGO-API@main/public/api/en/skins.json"];
+    await fetchSkinsFromAPI(statusEl);
+}
+
+async function fetchSkinsFromAPI(statusEl) {
+    if (statusEl) statusEl.textContent = "Syncing live database...";
+    
+    const endpoints = [
+        "https://raw.githubusercontent.com/ByMyKel/CSGO-API/main/public/api/en/skins.json", 
+        "https://bymykel.github.io/CSGO-API/api/en/skins.json"
+    ];
+    
+    let fetchSuccess = false;
     for (const url of endpoints) {
         try {
             const response = await fetch(url, { cache: "no-store" });
             if (!response.ok) continue;
             const data = await response.json();
             if (Array.isArray(data) && data.length > 0) {
-                localStorage.setItem("CS2_SKINS_DB", JSON.stringify(data));
+                await dbPut('skins', 'master', data);
                 processLoadedSkins(data);
-                return;
+                fetchSuccess = true;
+                break;
             }
-        } catch (err) {}
+        } catch (err) { }
     }
+    
+    if (fetchSuccess) return true;
+
+    if (validTargetSkins && validTargetSkins.length > 0) {
+        if (statusEl) statusEl.textContent = `Ready: ${validTargetSkins.length} skins loaded.`;
+        return false;
+    }
+    
+    try {
+        const cachedSkins = await dbGet('skins', 'master');
+        if (cachedSkins && Array.isArray(cachedSkins) && cachedSkins.length > 0) {
+            processLoadedSkins(cachedSkins);
+            return false;
+        }
+    } catch(e) {}
+
     if (statusEl) statusEl.textContent = "Failed to load database. Check internet connection.";
+    return false;
 }
 
 function processLoadedSkins(data) {
     allSkins = data;
-    validTargetSkins = data.filter(s => s && s.rarity && ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) && Array.isArray(s.collections) && s.collections.length > 0 && s.min_float !== null && s.max_float !== null);
+    validTargetSkins = data.filter(s => s && s.rarity && ["Industrial Grade", "Mil-Spec Grade", "Restricted", "Classified", "Covert"].includes(s.rarity.name) && (s.collections || s.crates) && s.min_float !== null && s.max_float !== null);
     const statusEl = document.getElementById("status");
-    if (statusEl) statusEl.textContent = `Ready: ${validTargetSkins.length} skins & ${Object.keys(priceCache || {}).length.toLocaleString()} prices loaded.`;
+    if (statusEl) statusEl.textContent = `Ready: ${validTargetSkins.length} skins loaded.`;
+    
+    if (window.location.hash.length > 1) {
+        checkUrlHashLoad();
+    } else {
+        goHome(); 
+    }
+}
+
+async function loadPrices() {
+    if (window.LOCAL_PRICES && Object.keys(window.LOCAL_PRICES).length > 0) {
+        priceCache = window.LOCAL_PRICES;
+        let ts = Date.now();
+        if (typeof window.PRICES_UPDATED_AT !== 'undefined') ts = window.PRICES_UPDATED_AT;
+        else if (typeof window.LOCAL_PRICES_TIMESTAMP !== 'undefined') ts = window.LOCAL_PRICES_TIMESTAMP;
+        
+        priceCache._timestamp = ts;
+        await dbPut('prices', 'master', priceCache);
+    } else {
+        const cachedPrices = await dbGet('prices', 'master');
+        if (cachedPrices) priceCache = cachedPrices;
+    }
     updatePriceTimestampDisplay();
-    checkUrlHashLoad();
+}
+
+async function forceDatabaseSync() {
+    const btn = document.getElementById("syncDataBtn");
+    btn.classList.add("spinning");
+    
+    await fetchSkinsFromAPI(document.getElementById("status"));
+    
+    return new Promise((resolve) => {
+        const oldScript = document.getElementById('prices-script-tag');
+        if (oldScript) oldScript.remove();
+        
+        const script = document.createElement('script');
+        script.id = 'prices-script-tag';
+        
+        let timeoutId = setTimeout(() => {
+            console.warn("Price sync timed out. Falling back to cached prices.");
+            updatePriceTimestampDisplay();
+            btn.classList.remove("spinning");
+            resolve();
+        }, 4000);
+
+        script.onload = async () => {
+            clearTimeout(timeoutId);
+            if (window.LOCAL_PRICES && Object.keys(window.LOCAL_PRICES).length > 0) {
+                priceCache = window.LOCAL_PRICES;
+                priceCache._timestamp = Date.now(); 
+                await dbPut('prices', 'master', priceCache);
+                updatePriceTimestampDisplay();
+                if (selectedTarget || sandboxTier) {
+                    onSettingChange();
+                    updateFinancials();
+                }
+            }
+            btn.classList.remove("spinning");
+            resolve();
+        };
+        
+        script.onerror = () => {
+            clearTimeout(timeoutId);
+            updatePriceTimestampDisplay();
+            btn.classList.remove("spinning");
+            resolve();
+        };
+        
+        document.head.appendChild(script);
+        script.src = 'prices.js?t=' + new Date().getTime(); 
+    });
+}
+
+// ============================================================================
+// 4. UTILITY FUNCTIONS & CRASH-PREVENTION HELPERS
+// ============================================================================
+function getSafeCollectionName(skin) {
+    if (skin && skin.collections && skin.collections.length > 0) return skin.collections[0].name;
+    if (skin && skin.crates && skin.crates.length > 0) return skin.crates[0].name;
+    return "Standard Drop";
+}
+
+function getContainerImage(skin) {
+    if (skin && skin.collections && skin.collections.length > 0 && skin.collections[0].image) return skin.collections[0].image;
+    if (skin && skin.crates && skin.crates.length > 0 && skin.crates[0].image) return skin.crates[0].image;
+    return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%238492a6"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
 }
 
 function formatTimeAgo(dateInput) {
     if (!dateInput) return null;
-    const date = new Date(dateInput);
+    let date = new Date(dateInput);
+    if (typeof dateInput === 'number' && dateInput < 20000000000) date = new Date(dateInput * 1000);
     if (isNaN(date.getTime())) return String(dateInput);
+    
     const diffMs = Date.now() - date.getTime();
     if (diffMs < 0) return "Just now";
-    const diffSec = Math.floor(diffMs / 1000), diffMin = Math.floor(diffSec / 60), diffHr = Math.floor(diffMin / 60), diffDays = Math.floor(diffHr / 24);
+    
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHr / 24);
+    
     if (diffSec < 60) return "Just now";
     if (diffMin < 60) return `${diffMin}m ago`;
     if (diffHr < 24) return `${diffHr}h ago`;
@@ -118,11 +234,24 @@ function formatTimeAgo(dateInput) {
 
 function updatePriceTimestampDisplay() {
     const badge = document.getElementById("priceTimestampBadge");
+    const syncBtn = document.getElementById("syncDataBtn");
     if (!badge) return;
-    const rawTimestamp = window.PRICES_UPDATED_AT || window.LOCAL_PRICES_TIMESTAMP || priceCache._timestamp || priceCache._updated_at || null;
-    if (rawTimestamp) { badge.textContent = `⚡ Prices: ${formatTimeAgo(rawTimestamp)}`; badge.style.display = "inline-flex"; } 
-    else if (Object.keys(priceCache).length > 0) { badge.textContent = `⚡ Cache Active`; badge.style.display = "inline-flex"; } 
-    else { badge.style.display = "none"; }
+    
+    let rawTimestamp = null;
+    if (priceCache._timestamp) rawTimestamp = priceCache._timestamp;
+    else if (typeof window.PRICES_UPDATED_AT !== 'undefined') rawTimestamp = window.PRICES_UPDATED_AT;
+    else if (typeof window.LOCAL_PRICES_TIMESTAMP !== 'undefined') rawTimestamp = window.LOCAL_PRICES_TIMESTAMP;
+    
+    if (rawTimestamp) { 
+        badge.textContent = `⚡ Prices: ${formatTimeAgo(rawTimestamp)}`; 
+        badge.style.display = "inline-flex"; 
+    } else if (Object.keys(priceCache).length > 0) { 
+        badge.textContent = `⚡ Cache Active`; 
+        badge.style.display = "inline-flex"; 
+    } else { 
+        badge.style.display = "none"; 
+    }
+    if (syncBtn) syncBtn.style.display = "inline-block";
 }
 
 function getCSFloatSearchUrl(marketHashName, minFloat, maxFloat) {
@@ -146,8 +275,8 @@ function getMarketHash(skinName, wear) { return `${isStatTrak ? "StatTrak™ " :
 function getSteamMarketUrl(marketHashName) { return `https://steamcommunity.com/market/listings/730/${encodeURIComponent(marketHashName)}`; }
 
 function getSourceInfo(skin) {
-    const coll = skin.collections && skin.collections[0] ? skin.collections[0].name : "";
-    const crate = skin.crates && skin.crates[0] ? skin.crates[0].name : "";
+    const coll = skin && skin.collections && skin.collections.length > 0 ? skin.collections[0].name : "";
+    const crate = skin && skin.crates && skin.crates.length > 0 ? skin.crates[0].name : "";
     if (coll && crate) return `${coll} &bull; ${crate}`;
     if (coll) return coll;
     if (crate) return crate;
@@ -159,12 +288,32 @@ function formatMoney(amount) { if (isNaN(amount) || amount === null) return "N/A
 function targetRarity(s) { return (s && s.rarity) ? s.rarity.name : ""; }
 
 function getNormalizedTarget() {
-    if (!selectedTarget) return 0;
+    if (!selectedTarget && !sandboxTier) return 0.5; // Neutral sandbox default
     const maxLimit = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
     const bufferVal = parseFloat(document.getElementById("bufferSelect")?.value ?? "0.0005");
+    
+    // In sandbox, if no selected target, base it purely on input bars without skin-specific caps
+    if (!selectedTarget) {
+        return Math.max(0, Math.min(1, maxLimit - bufferVal));
+    }
+    
     const minF = selectedTarget.min_float ?? 0.00, maxF = selectedTarget.max_float ?? 1.00;
     if (maxF === minF) return 0;
     return Math.max(0, Math.min(1, (Math.max(minF, maxLimit - bufferVal) - minF) / (maxF - minF)));
+}
+
+function getBasePrice(skin, floatVal) {
+    if (!skin) return null;
+    if (floatVal !== undefined) {
+         let p = priceCache[getMarketHash(skin.name, getWearName(floatVal))];
+         if (p !== undefined && p !== null) return p;
+    }
+    let floor = null;
+    ["Field-Tested", "Minimal Wear", "Factory New", "Battle-Scarred", "Well-Worn"].forEach(w => {
+        let p = priceCache[`${skin.name} (${w})`] || priceCache[`StatTrak™ ${skin.name} (${w})`];
+        if (p !== undefined && p !== null && (floor === null || p < floor)) floor = p;
+    });
+    return floor;
 }
 
 function toggleSection(wrapperId, chevronId) {
@@ -173,6 +322,16 @@ function toggleSection(wrapperId, chevronId) {
     if (!wrapper || !chevron) return;
     if (wrapper.style.display === "none") { wrapper.style.display = ""; chevron.classList.remove("collapsed"); } 
     else { wrapper.style.display = "none"; chevron.classList.add("collapsed"); }
+}
+
+function toggleValidCollections() {
+    const el = document.getElementById("validCollectionsList");
+    if(el) { el.style.display = el.style.display === "block" ? "none" : "block"; }
+}
+
+function closeValidCollections() {
+    const el = document.getElementById("validCollectionsList");
+    if(el) el.style.display = "none";
 }
 
 function setupStickyFooter() {
@@ -192,39 +351,48 @@ function toggleStatTrak() {
     isStatTrak = !isStatTrak;
     const btn = document.getElementById("stToggle");
     if (btn) btn.classList.toggle("active", isStatTrak);
+    const inputEl = document.getElementById("skinInput");
+    if (inputEl) inputEl.value = "";
+    document.getElementById("dropdownResults").style.display = "none";
     onSettingChange();
 }
 
 function onCurrencyChange() {
-    if (!selectedTarget) return;
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
-    if (tIdx <= 0) return;
-    renderEligibleInputs(TIER_ORDER[tIdx - 1], getNormalizedTarget());
-    renderSlotCards(TIER_ORDER[tIdx - 1]);
-    renderOutcomeCards();
-    updateFinancials();
+    if (selectedTarget || sandboxTier) {
+        renderSlotCards();
+        computeAndRenderOutcomes();
+        updateFinancials();
+    }
 }
 
 function onSettingChange() {
-    if (selectedTarget) {
+    if (selectedTarget || sandboxTier) {
         const targetNorm = getNormalizedTarget();
         const cur = getActiveCurrency();
         slots.forEach(slot => {
             if (slot.skin) {
                 const sMin = slot.skin.min_float ?? 0, sMax = slot.skin.max_float ?? 1;
-                slot.float = parseFloat(((targetNorm * (sMax - sMin)) + sMin).toFixed(4));
+                let dFloat = selectedTarget ? ((targetNorm * (sMax - sMin)) + sMin) : targetNorm;
+                slot.float = parseFloat(dFloat.toFixed(4));
                 const hash = getMarketHash(slot.skin.name, getWearName(slot.float));
                 slot.price = priceCache[hash] ? parseFloat((priceCache[hash] * cur.rate).toFixed(2)) : null;
             }
         });
-        const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
-        if (tIdx > 0) renderSlotCards(TIER_ORDER[tIdx - 1]);
+        renderSlotCards();
+        runCalculation();
     }
-    runCalculation();
 }
 
 function goHome() {
-    selectedTarget = null; selectedPrimaryIndex = 0; secondarySkin = null; isStatTrak = false;
+    closeValidCollections();
+    selectedTarget = null; 
+    selectedPrimaryIndex = 0; 
+    secondarySkin = null; 
+    sandboxTier = null;
+    isStatTrak = false;
+    
+    slots.forEach(slot => { slot.skin = null; slot.float = 0.05; slot.price = null; });
+    
     const stBtn = document.getElementById("stToggle"); if (stBtn) stBtn.classList.remove("active");
     const inputEl = document.getElementById("skinInput"); if (inputEl) inputEl.value = "";
     document.getElementById("exteriorSelect").value = "FT";
@@ -232,9 +400,12 @@ function goHome() {
     document.getElementById("wearMaxInput").value = "0.3800";
     document.getElementById("bufferSelect").value = "0.0005";
     updateWearPointers();
+    
     const dropEl = document.getElementById("dropdownResults"); if (dropEl) { dropEl.style.display = "none"; dropEl.innerHTML = ""; }
     const resSection = document.getElementById("resultSection"); if (resSection) resSection.style.display = "none";
+    
     history.replaceState(null, "", window.location.pathname);
+    renderSlotCards(); // Render sandbox mode empty slots
 }
 
 function onExteriorChange() {
@@ -267,8 +438,9 @@ function updateWearPointers() {
 
 function updatePresetButtons() {
     if (!selectedTarget) return;
-    const tColl = selectedTarget.collections[0].name;
-    const primaryCount = slots.filter(s => s.skin && s.skin.collections[0].name === tColl).length;
+    const tColl = getSafeCollectionName(selectedTarget);
+    const primaryCount = slots.filter(s => s.skin && getSafeCollectionName(s.skin) === tColl).length;
+    
     document.querySelectorAll(".preset-btn").forEach(btn => { 
         if (btn.classList.contains('btn-clear-all')) return;
         if (parseInt(btn.getAttribute("data-count")) === primaryCount) btn.classList.add("active"); 
@@ -278,192 +450,249 @@ function updatePresetButtons() {
 
 function ensureFillerSkinExists(inputTier) {
     if (!secondarySkin && selectedTarget) {
-        const tColl = selectedTarget.collections[0].name;
-        const eligible = allSkins.filter(s => s.rarity && s.rarity.name === inputTier && s.collections && s.collections.length > 0 && s.min_float !== null && s.max_float !== null);
-        secondarySkin = eligible.find(s => s.collections[0].name !== tColl) || eligible[0];
+        const tColl = getSafeCollectionName(selectedTarget);
+        const eligible = allSkins.filter(s => s && s.rarity && s.rarity.name === inputTier && s.min_float !== null && s.max_float !== null);
+        secondarySkin = eligible.find(s => getSafeCollectionName(s) !== tColl) || eligible[0];
     }
 }
 
 function clearAllSlots() {
+    closeValidCollections();
     slots.forEach(slot => { slot.skin = null; slot.float = 0.05; slot.price = null; });
     selectedPrimaryIndex = 0; secondarySkin = null;
+    sandboxTier = null;
+    
     if (selectedTarget) {
         const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
-        if (tIdx > 0) { const inputTier = TIER_ORDER[tIdx - 1]; renderSlotCards(inputTier); computeAndRenderOutcomes(inputTier); }
+        if (tIdx > 0) { 
+            runCalculation(); 
+        }
+    } else {
+        document.getElementById("resultSection").style.display = "none";
+        renderSlotCards();
     }
     updatePresetButtons(); updateUrlHash();
 }
 
-function applySplitPreset(primaryCount) {
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); if (tIdx <= 0) return;
-    const inputTier = TIER_ORDER[tIdx - 1]; ensureFillerSkinExists(inputTier);
-    const targetNormalized = getNormalizedTarget();
-    const pSkin = targetCollInputs[selectedPrimaryIndex];
-    const cur = getActiveCurrency();
-    const pMin = pSkin ? (pSkin.min_float ?? 0) : 0, pMax = pSkin ? (pSkin.max_float ?? 1) : 1;
-    const sMin = secondarySkin ? (secondarySkin.min_float ?? 0) : 0, sMax = secondarySkin ? (secondarySkin.max_float ?? 1) : 1;
-    const pFloat = parseFloat(((targetNormalized * (pMax - pMin)) + pMin).toFixed(4));
-    const sFloat = parseFloat(((targetNormalized * (sMax - sMin)) + sMin).toFixed(4));
-
-    for (let i = 0; i < 10; i++) {
-        let skin = i < primaryCount ? pSkin : secondarySkin;
-        let flt = i < primaryCount ? pFloat : sFloat;
-        slots[i].skin = skin; slots[i].float = flt;
-        if (skin) {
-            let hash = getMarketHash(skin.name, getWearName(flt));
-            slots[i].price = priceCache[hash] ? parseFloat((priceCache[hash] * cur.rate).toFixed(2)) : null;
-        }
-    }
-    updatePresetButtons(); renderSlotCards(inputTier); computeAndRenderOutcomes(inputTier); updateUrlHash();
-}
-
-function applyMultiCheapestFiller() {
+// ============================================================================
+// 5. URL ROUTING & SEARCH LOGIC
+// ============================================================================
+function updateUrlHash() {
     if (!selectedTarget) return;
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); if (tIdx <= 0) return;
-    const inputTier = TIER_ORDER[tIdx - 1], tColl = selectedTarget.collections[0].name, cur = getActiveCurrency(), targetNorm = getNormalizedTarget();
-    const cFillers = allSkins.filter(s => s.rarity && s.rarity.name === inputTier && s.collections && s.collections.length > 0 && s.collections[0].name !== tColl && s.min_float !== null && s.max_float !== null);
-    if (cFillers.length === 0) return;
-
-    const pricedFillers = [];
-    cFillers.forEach(s => {
-        let minF = s.min_float ?? 0, maxF = s.max_float ?? 1, dFloat = minF + (maxF - minF) * targetNorm;
-        let priceUSD = priceCache[getMarketHash(s.name, getWearName(dFloat))];
-        if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD)) pricedFillers.push({ skin: s, priceUSD, dFloat });
-    });
-    pricedFillers.sort((a, b) => a.priceUSD - b.priceUSD);
-    
-    const topFillers = [], seen = new Set();
-    for (const item of pricedFillers) { if (!seen.has(item.skin.name)) { seen.add(item.skin.name); topFillers.push(item); if (topFillers.length >= 4) break; } }
-    if (topFillers.length === 0) return;
-    secondarySkin = topFillers[0].skin;
-
-    let pCount = slots.filter(s => s.skin && s.skin.collections[0].name === tColl).length;
-    if (pCount >= 10 || pCount === 0) pCount = 1;
-    
-    const pSkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
-    const pMin = pSkin ? (pSkin.min_float ?? 0) : 0, pMax = pSkin ? (pSkin.max_float ?? 1) : 1;
-    const pFloat = parseFloat(((targetNorm * (pMax - pMin)) + pMin).toFixed(4));
-    const pPriceLocal = pSkin && priceCache[getMarketHash(pSkin.name, getWearName(pFloat))] !== undefined ? parseFloat((priceCache[getMarketHash(pSkin.name, getWearName(pFloat))] * cur.rate).toFixed(2)) : null;
-
-    for (let i = 0; i < 10; i++) {
-        if (i < pCount) { 
-            slots[i].skin = pSkin; slots[i].float = pFloat; slots[i].price = pPriceLocal; 
-        } else {
-            let fEntry = topFillers[(i - pCount) % topFillers.length];
-            let fMin = fEntry.skin.min_float ?? 0, fMax = fEntry.skin.max_float ?? 1;
-            let fFloat = parseFloat(((targetNorm * (fMax - fMin)) + fMin).toFixed(4));
-            let fPriceUSD = priceCache[getMarketHash(fEntry.skin.name, getWearName(fFloat))];
-            slots[i].skin = fEntry.skin; slots[i].float = fFloat; slots[i].price = fPriceUSD !== undefined && fPriceUSD !== null ? parseFloat((fPriceUSD * cur.rate).toFixed(2)) : null;
-        }
-    }
-    updatePresetButtons(); renderSlotCards(inputTier); computeAndRenderOutcomes(inputTier); updateUrlHash();
+    const params = new URLSearchParams();
+    params.set("target", selectedTarget.name);
+    params.set("wearMin", document.getElementById("wearMinInput").value);
+    params.set("wearMax", document.getElementById("wearMaxInput").value);
+    params.set("buffer", document.getElementById("bufferSelect").value);
+    params.set("st", isStatTrak ? "1" : "0");
+    params.set("fee", document.getElementById("feeSelect").value);
+    params.set("cur", document.getElementById("currencySelect").value);
+    history.replaceState(null, "", `#${params.toString()}`);
 }
 
-function applyBudgetFiller() {
-    if (!selectedTarget) return;
-    const budgetInput = document.getElementById("budgetInput").value;
-    const budgetLimit = parseFloat(budgetInput);
-    if (isNaN(budgetLimit) || budgetLimit <= 0) return alert("Please enter a valid target budget.");
+function checkUrlHashLoad() {
+    const hash = window.location.hash.substring(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const targetName = params.get("target");
+    
+    if (params.get("st") === "1") { isStatTrak = true; document.getElementById("stToggle").classList.add("active"); }
+    if (params.get("buffer")) document.getElementById("bufferSelect").value = params.get("buffer");
+    if (params.get("fee")) document.getElementById("feeSelect").value = params.get("fee");
+    if (params.get("cur")) document.getElementById("currencySelect").value = params.get("cur");
 
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); 
-    if (tIdx <= 0) return;
-    const inputTier = TIER_ORDER[tIdx - 1], tColl = selectedTarget.collections[0].name, cur = getActiveCurrency(), targetNorm = getNormalizedTarget();
+    const fillerName = params.get("filler");
     
-    let pCount = slots.filter(s => s.skin && s.skin.collections[0].name === tColl).length;
-    if (pCount >= 10 || pCount === 0) pCount = 1;
-    
-    const pSkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
-    const pMin = pSkin ? (pSkin.min_float ?? 0) : 0, pMax = pSkin ? (pSkin.max_float ?? 1) : 1;
-    const pFloat = parseFloat(((targetNorm * (pMax - pMin)) + pMin).toFixed(4));
-    const pPriceUSD = priceCache[getMarketHash(pSkin.name, getWearName(pFloat))];
-    const pPriceLocal = pPriceUSD !== undefined ? pPriceUSD * cur.rate : 0;
+    if (targetName) {
+        const match = validTargetSkins.find(s => s.name.toLowerCase() === targetName.toLowerCase());
+        if (match) {
+            selectedTarget = match;
+            document.getElementById("skinInput").value = match.name;
+            
+            const targetCollName = getSafeCollectionName(match);
+            const inputTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(match)) - 1];
+            
+            targetCollInputs = allSkins.filter(s => s && s.rarity && s.rarity.name === inputTier && getSafeCollectionName(s) === targetCollName);
+            selectedPrimaryIndex = 0; 
 
-    const primaryTotalCost = pPriceLocal * pCount;
-    const remainingBudget = budgetLimit - primaryTotalCost;
-    const fillerCount = 10 - pCount;
-    
-    if (remainingBudget <= 0 && fillerCount > 0) {
-        return alert(`Your primary skins alone cost ${formatMoney(primaryTotalCost)}, exceeding or eating up the entire budget.`);
-    }
+            const wearMaxParam = params.get("wearMax") || params.get("wear");
+            if (wearMaxParam) {
+                const maxVal = parseFloat(wearMaxParam);
+                document.getElementById("wearMaxInput").value = maxVal.toFixed(4);
+                if (params.get("wearMin")) document.getElementById("wearMinInput").value = parseFloat(params.get("wearMin")).toFixed(4);
+                let minVal = parseFloat(document.getElementById("wearMinInput").value);
+                let matched = "CUSTOM";
+                for (const [key, range] of Object.entries(WEAR_RANGES)) {
+                    if (Math.abs(minVal - range.min) < 0.0005 && Math.abs(maxVal - range.max) < 0.0005) { matched = key; break; }
+                }
+                document.getElementById("exteriorSelect").value = matched; 
+                updateWearPointers();
+            }
 
-    const maxPerFiller = fillerCount > 0 ? (remainingBudget / fillerCount) / cur.rate : 0;
-    
-    const cFillers = allSkins.filter(s => s.rarity && s.rarity.name === inputTier && s.collections && s.collections.length > 0 && s.collections[0].name !== tColl && s.min_float !== null && s.max_float !== null);
-    if (cFillers.length === 0) return;
-
-    const pricedFillers = [];
-    cFillers.forEach(s => {
-        let minF = s.min_float ?? 0, maxF = s.max_float ?? 1, dFloat = minF + (maxF - minF) * targetNorm;
-        let priceUSD = priceCache[getMarketHash(s.name, getWearName(dFloat))];
-        if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD) && priceUSD <= maxPerFiller) {
-            pricedFillers.push({ skin: s, priceUSD, dFloat });
-        }
-    });
-    
-    pricedFillers.sort((a, b) => b.priceUSD - a.priceUSD);
-    
-    const topFillers = [], seen = new Set();
-    for (const item of pricedFillers) { 
-        if (!seen.has(item.skin.name)) { seen.add(item.skin.name); topFillers.push(item); if (topFillers.length >= 4) break; } 
-    }
-    
-    if (topFillers.length === 0 && fillerCount > 0) {
-         return alert(`Could not find any fillers under the required budget of ${cur.symbol}${(maxPerFiller * cur.rate).toFixed(2)} each.`);
-    }
-    if (topFillers.length > 0) secondarySkin = topFillers[0].skin;
-
-    for (let i = 0; i < 10; i++) {
-        if (i < pCount) { 
-            slots[i].skin = pSkin; slots[i].float = pFloat; slots[i].price = pPriceLocal > 0 ? parseFloat(pPriceLocal.toFixed(2)) : null; 
-        } else {
-            let fEntry = topFillers[(i - pCount) % topFillers.length];
-            let fMin = fEntry.skin.min_float ?? 0, fMax = fEntry.skin.max_float ?? 1;
-            let fFloat = parseFloat(((targetNorm * (fMax - fMin)) + fMin).toFixed(4));
-            let fPriceUSD = priceCache[getMarketHash(fEntry.skin.name, getWearName(fFloat))];
-            slots[i].skin = fEntry.skin; slots[i].float = fFloat; slots[i].price = fPriceUSD !== undefined && fPriceUSD !== null ? parseFloat((fPriceUSD * cur.rate).toFixed(2)) : null;
+            if (fillerName) {
+                const fMatch = allSkins.find(s => s.name.toLowerCase() === fillerName.toLowerCase());
+                if (fMatch) secondarySkin = fMatch;
+                applySplitPreset(5); 
+            } else {
+                applySplitPreset(10); 
+            }
+            runCalculation();
         }
     }
-    updatePresetButtons(); renderSlotCards(inputTier); computeAndRenderOutcomes(inputTier); updateUrlHash();
 }
 
+function handleSearch(query) {
+    try {
+        closeValidCollections(); 
+        const dropdown = document.getElementById("dropdownResults");
+        const cleanQuery = (query || "").trim().toLowerCase();
+        
+        if (!cleanQuery) { dropdown.style.display = "none"; dropdown.innerHTML = ""; return; }
+        if (!validTargetSkins || validTargetSkins.length === 0) {
+            dropdown.innerHTML = `<div class="dropdown-item" style="color: var(--accent-gold); cursor: default;">Loading database...</div>`;
+            dropdown.style.display = "block"; return;
+        }
+        
+        let normalizedQuery = cleanQuery.replace(/\bdeagle\b/g, "desert eagle");
+        const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+        
+        const matches = validTargetSkins.filter(skin => {
+            if (!skin || !skin.name) return false;
+            if (isStatTrak && !skin.stattrak) return false;
+            return tokens.every(token => skin.name.toLowerCase().includes(token));
+        }).slice(0, 25);
+      
+        if (matches.length === 0) {
+            dropdown.innerHTML = `<div class="dropdown-item" style="color: var(--text-muted); cursor: default;">No matching skin found.</div>`;
+            dropdown.style.display = "block"; return;
+        }
+        
+        dropdown.innerHTML = "";
+        matches.forEach(skin => {
+            const item = document.createElement("div");
+            item.className = "dropdown-item";
+            
+            const collName = getSafeCollectionName(skin);
+            const rName = skin.rarity ? skin.rarity.name : "";
+            const color = RARITY_COLORS[rName] || "var(--accent-cyan)";
+            
+            item.innerHTML = `
+                <div class="dropdown-left">
+                    <div class="dropdown-pill" style="background-color: ${color}"></div>
+                    <img class="dropdown-thumb" src="${skin.image || ''}" onerror="this.style.display='none'">
+                    <div class="dropdown-info">
+                        <div class="dropdown-name">${skin.name}</div>
+                        <div class="dropdown-coll">${collName} &bull; ${rName}</div>
+                    </div>
+                </div>`;
+            
+            item.onclick = () => selectSkin(skin);
+            dropdown.appendChild(item);
+        });
+        dropdown.style.display = "block";
+    } catch(e) {
+        console.error("Search UI encountered an error:", e);
+    }
+}
+
+function selectSkin(skin) {
+    try {
+        closeValidCollections(); 
+        selectedTarget = skin;
+        sandboxTier = null; // Clear sandbox rules
+        document.getElementById("skinInput").value = skin.name;
+        document.getElementById("dropdownResults").style.display = "none";
+        
+        const targetTierIndex = TIER_ORDER.indexOf(targetRarity(skin));
+        if (targetTierIndex <= 0) return; 
+        
+        const inputTier = TIER_ORDER[targetTierIndex - 1];
+        const targetCollName = getSafeCollectionName(skin);
+        
+        targetCollInputs = allSkins.filter(s => 
+            s && s.rarity && s.rarity.name === inputTier && 
+            getSafeCollectionName(s) === targetCollName
+        );
+        
+        selectedPrimaryIndex = 0; 
+        secondarySkin = null;
+        applySplitPreset(10); 
+        runCalculation();
+    } catch(err) {
+        console.error("Error executing skin selection:", err);
+    }
+}
+
+// ============================================================================
+// 6. DASHBOARD & HYBRID SANDBOX LOGIC
+// ============================================================================
 function runCalculation() {
-    if (!selectedTarget) return;
-    const resSection = document.getElementById("resultSection"), noticeBox = document.getElementById("uncraftableNotice");
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
-    
-    if (tIdx <= 0) { resSection.style.display = "none"; return; }
-    const inputTier = TIER_ORDER[tIdx - 1];
+    const resSection = document.getElementById("resultSection");
+    const noticeBox = document.getElementById("uncraftableNotice");
 
-    if (!targetCollInputs || targetCollInputs.length === 0) {
-        resSection.style.display = "flex"; noticeBox.style.display = "block";
-        noticeBox.innerHTML = `<b>Trade-Up Not Possible:</b> Case collections do not contain any <em>${inputTier}</em> skins for this target.`;
+    if (selectedTarget) {
+        // --- REVERSE CALCULATOR MODE ---
+        const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
+        if (tIdx <= 0) { resSection.style.display = "none"; return; }
+        const inputTier = TIER_ORDER[tIdx - 1];
+
+        if (!targetCollInputs || targetCollInputs.length === 0) {
+            resSection.style.display = "flex"; noticeBox.style.display = "block";
+            noticeBox.innerHTML = `<b>Trade-Up Not Possible:</b> Case collections do not contain any <em>${inputTier}</em> skins for this target.`;
+            document.getElementById("eligibleContainer").style.display = "none"; 
+            document.getElementById("outcomesContainer").style.display = "none";
+            document.getElementById("statVerdict").textContent = "UNCRAFTABLE"; 
+            document.getElementById("statVerdict").className = "stat-value red"; 
+            return;
+        }
+
+        noticeBox.style.display = "none";
+        document.getElementById("eligibleContainer").style.display = "block"; 
+        document.getElementById("outcomesContainer").style.display = "block";
+        
+        ensureFillerSkinExists(inputTier);
+        renderEligibleInputs(inputTier, getNormalizedTarget()); 
+        renderSlotCards(); 
+        computeAndRenderOutcomes();
+        
+        resSection.style.display = "flex"; 
+        updateUrlHash();
+
+    } else {
+        // --- SANDBOX (FORWARD) MODE ---
+        const filledSlots = slots.filter(s => s.skin);
+        if (filledSlots.length === 0) {
+            sandboxTier = null; 
+            resSection.style.display = "none";
+            renderSlotCards(); 
+            return;
+        }
+
+        sandboxTier = filledSlots[0].skin.rarity.name;
+        const sIdx = TIER_ORDER.indexOf(sandboxTier);
+        if (sIdx === TIER_ORDER.length - 1) { 
+            resSection.style.display = "flex"; noticeBox.style.display = "block";
+            noticeBox.innerHTML = `<b>Trade-Up Not Possible:</b> You cannot trade up Covert skins.`;
+            document.getElementById("eligibleContainer").style.display = "none";
+            document.getElementById("outcomesContainer").style.display = "none";
+            renderSlotCards();
+            return;
+        }
+
+        noticeBox.style.display = "none";
         document.getElementById("eligibleContainer").style.display = "none"; 
-        document.getElementById("recipeContainer").style.display = "none"; 
-        document.getElementById("outcomesContainer").style.display = "none";
-        document.getElementById("statVerdict").textContent = "UNCRAFTABLE"; 
-        document.getElementById("statVerdict").className = "stat-value red"; 
-        return;
+        document.getElementById("outcomesContainer").style.display = "block";
+        
+        renderSlotCards(); 
+        computeAndRenderOutcomes();
+        resSection.style.display = "flex"; 
     }
-
-    noticeBox.style.display = "none";
-    document.getElementById("eligibleContainer").style.display = "block"; 
-    document.getElementById("recipeContainer").style.display = "block"; 
-    document.getElementById("outcomesContainer").style.display = "block";
-    
-    ensureFillerSkinExists(inputTier);
-    slots.forEach(slot => { if (!slot.skin) slot.skin = targetCollInputs[selectedPrimaryIndex]; });
-    
-    renderEligibleInputs(inputTier, getNormalizedTarget()); 
-    renderSlotCards(inputTier); 
-    computeAndRenderOutcomes(inputTier);
-    
-    resSection.style.display = "flex"; 
-    updateUrlHash();
 }
 
 function renderEligibleInputs(inputTier, targetNorm) {
     const container = document.getElementById("eligibleList"); 
     container.innerHTML = "";
+    if (!selectedTarget) return;
     
     const cur = getActiveCurrency();
     const feeVal = document.getElementById("feeSelect")?.value || "0.8696";
@@ -477,7 +706,7 @@ function renderEligibleInputs(inputTier, targetNorm) {
         let hash = getMarketHash(skin.name, getWearName(rawCap));
         let priceUSD = priceCache[hash];
         let priceDisp = priceUSD !== undefined && priceUSD !== null ? (priceUSD * cur.rate).toFixed(2) : "";
-        let canCraft = lowerTierName && allSkins.some(s => s.collections && s.collections.some(c => c.name === skin.collections[0]?.name) && s.rarity && s.rarity.name === lowerTierName);
+        let canCraft = lowerTierName && allSkins.some(s => s && s.rarity && s.rarity.name === lowerTierName && getSafeCollectionName(s) === getSafeCollectionName(skin));
         let craftHash = `#target=${encodeURIComponent(skin.name)}&wearMax=${rawCap.toFixed(4)}&wearMin=${inMin.toFixed(4)}&st=${isStatTrak ? "1" : "0"}&fee=${feeVal}&cur=${curCode}`;
 
         const isSel = index === selectedPrimaryIndex;
@@ -509,22 +738,18 @@ function renderEligibleInputs(inputTier, targetNorm) {
 
 function selectEligiblePrimary(index) {
     selectedPrimaryIndex = index;
-    const pSkin = targetCollInputs[index], cur = getActiveCurrency(), targetNorm = getNormalizedTarget(), tColl = selectedTarget.collections[0].name;
+    const pSkin = targetCollInputs[index], cur = getActiveCurrency(), targetNorm = getNormalizedTarget(), tColl = getSafeCollectionName(selectedTarget);
     const pMin = pSkin ? (pSkin.min_float ?? 0) : 0, pMax = pSkin ? (pSkin.max_float ?? 1) : 1;
     const pFloat = parseFloat(((targetNorm * (pMax - pMin)) + pMin).toFixed(4));
     
     slots.forEach(slot => {
-        if (slot.skin && slot.skin.collections[0].name === tColl) {
+        if (slot.skin && getSafeCollectionName(slot.skin) === tColl) {
             slot.skin = pSkin; slot.float = pFloat;
             if (pSkin) slot.price = priceCache[getMarketHash(pSkin.name, getWearName(pFloat))] ? parseFloat((priceCache[getMarketHash(pSkin.name, getWearName(pFloat))] * cur.rate).toFixed(2)) : null;
         }
     });
     
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget));
-    if (tIdx > 0) { 
-        renderSlotCards(TIER_ORDER[tIdx - 1]); 
-        computeAndRenderOutcomes(TIER_ORDER[tIdx - 1]); 
-    }
+    runCalculation();
 }
 
 function onEligiblePriceChange(index, val) {
@@ -534,6 +759,7 @@ function onEligiblePriceChange(index, val) {
     let hash = getMarketHash(skin.name, getWearName(Math.min(inMax, (targetNorm * (inMax - inMin)) + inMin)));
     
     priceCache[hash] = num !== null ? (num / cur.rate) : null;
+    dbPut('prices', 'master', priceCache); // Permanent save
     
     if (index === selectedPrimaryIndex) {
         slots.forEach((slot, i) => { 
@@ -548,81 +774,100 @@ function onEligiblePriceChange(index, val) {
     updateUrlHash();
 }
 
-function renderSlotCards(inputTier) {
+function renderSlotCards() {
     const container = document.getElementById("slotsGrid"); 
     container.innerHTML = "";
     
-    const cur = getActiveCurrency(), pSkin = targetCollInputs[selectedPrimaryIndex], tColl = selectedTarget.collections[0].name;
-    if (!pSkin) return;
+    const cur = getActiveCurrency();
+    const tColl = selectedTarget ? getSafeCollectionName(selectedTarget) : null;
+    let activeTier = null;
+    
+    if (selectedTarget) {
+        activeTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(selectedTarget)) - 1];
+    } else if (sandboxTier) {
+        activeTier = sandboxTier;
+    }
 
-    const eligSkins = allSkins.filter(s => s.rarity && s.rarity.name === inputTier && s.collections && s.collections.length > 0 && s.min_float !== null && s.max_float !== null);
-    const tInputs = eligSkins.filter(s => s.collections[0].name === tColl);
-    const oInputs = eligSkins.filter(s => s.collections[0].name !== tColl);
-    
-    document.getElementById("primarySkinSelect").innerHTML = targetCollInputs.map((s, idx) => `<option value="${idx}" ${idx === selectedPrimaryIndex ? "selected" : ""}>${s.name}</option>`).join("");
-    document.getElementById("fillerSkinSelect").innerHTML = oInputs.map(s => `<option value="${s.name}" ${secondarySkin && s.name === secondarySkin.name ? "selected" : ""}>${s.name} (${s.collections[0].name})</option>`).join("");
-    
-    const lowerTierName = TIER_ORDER[TIER_ORDER.indexOf(inputTier) - 1] || null;
+    const batchPanel = document.getElementById("batchConfigPanel");
+    if (selectedTarget) {
+        batchPanel.style.display = "flex";
+        const eligSkins = allSkins.filter(s => s && s.rarity && s.rarity.name === activeTier && s.min_float !== null && s.max_float !== null && getSafeCollectionName(s) !== "Standard Drop");
+        const oInputs = eligSkins.filter(s => getSafeCollectionName(s) !== tColl);
+        
+        document.getElementById("primarySkinSelect").innerHTML = targetCollInputs.map((s, idx) => `<option value="${idx}" ${idx === selectedPrimaryIndex ? "selected" : ""}>${s.name}</option>`).join("");
+        document.getElementById("fillerSkinSelect").innerHTML = oInputs.map(s => `<option value="${s.name}" ${secondarySkin && s.name === secondarySkin.name ? "selected" : ""}>${s.name} (${getSafeCollectionName(s)})</option>`).join("");
+    } else {
+        batchPanel.style.display = "none";
+    }
 
     slots.forEach((slot, i) => {
-        const skin = slot.skin || pSkin;
-        const isTargetColl = skin && skin.collections[0]?.name === tColl;
-        const wearName = getWearName(slot.float);
-        const markerPercent = Math.max(0, Math.min(100, slot.float * 100)).toFixed(1);
-        const priceDisp = slot.price !== null && !isNaN(slot.price) ? slot.price.toFixed(2) : "";
-        const rarityHex = RARITY_HEX[(skin && skin.rarity ? skin.rarity.name : inputTier)] || "#4b69ff";
-        const hashName = skin ? getMarketHash(skin.name, wearName) : "";
-        const canCraft = lowerTierName && allSkins.some(s => s.collections && s.collections.some(c => c.name === (skin ? skin.collections[0]?.name : "")) && s.rarity && s.rarity.name === lowerTierName);
-        
-        let optHtml = `<div class="slot-optgroup-label">Target Collection</div>`;
-        tInputs.forEach(s => { optHtml += `<div class="slot-opt-item ${skin && s.name === skin.name ? 'selected' : ''}" data-name="${s.name}" onclick="selectSlotSkin(${i}, '${encodeURIComponent(s.name)}')"><span class="slot-opt-name">${s.name}</span></div>`; });
-        optHtml += `<div class="slot-optgroup-label">Other Collections</div>`;
-        oInputs.forEach(s => { optHtml += `<div class="slot-opt-item ${skin && s.name === skin.name ? 'selected' : ''}" data-name="${s.name}" onclick="selectSlotSkin(${i}, '${encodeURIComponent(s.name)}')"><span class="slot-opt-name">${s.name}</span></div>`; });
+        const skin = slot.skin; 
+        const isTargetColl = selectedTarget && skin && getSafeCollectionName(skin) === tColl;
+        const rarityHex = skin ? (RARITY_HEX[skin.rarity.name] || "#4b69ff") : "#262f40";
 
         const card = document.createElement("div"); 
-        card.className = `slot-card ${isTargetColl ? 'is-target-coll' : 'is-other-coll'}`; 
+        card.className = `slot-card ${!skin ? 'is-empty' : (isTargetColl ? 'is-target-coll' : 'is-other-coll')}`; 
         card.id = `slot-card-${i}`;
         
-        card.innerHTML = `
-            <div class="slot-card-header">
-                <div style="display: flex; align-items: center; gap: 6px;"><span class="slot-num-badge">SLOT #${i + 1}</span>
-                    ${skin ? `<a href="${getSteamMarketUrl(hashName)}" id="slot-steam-${i}" target="_blank" class="slot-steam-link">Steam ↗</a>${canCraft ? `<a href="#target=${encodeURIComponent(skin.name)}&wearMax=${slot.float}" id="slot-tradeup-${i}" target="_blank" class="slot-slot-craft-link">Trade-Up ↗</a>` : ''}` : ''}
+        if (!skin) {
+            card.innerHTML = `
+                <div class="slot-card-header"><span class="slot-num-badge">SLOT #${i + 1}</span></div>
+                <div class="empty-slot-btn" id="slot-btn-${i}" onclick="toggleSlotDropdown(${i}, event)">
+                    <div class="empty-plus">+</div><div>Add Skin</div>
                 </div>
-                <span class="badge ${isTargetColl ? 'badge-best' : 'badge-secondary'}">${isTargetColl ? 'Primary' : 'Filler'}</span>
-            </div>
-            <div class="slot-thumb-box" style="background: radial-gradient(circle at 50% 60%, ${rarityHex}38 0%, rgba(13, 17, 26, 0.96) 82%); border-bottom: 2px solid ${rarityHex};">
-                <img class="slot-thumb" src="${skin ? (skin.image || '') : ''}" onerror="this.style.display='none'">
-            </div>
-            <div class="slot-picker-wrap">
-                <button type="button" class="slot-picker-btn" id="slot-btn-${i}" onclick="toggleSlotDropdown(${i}, event)">
-                    <span class="slot-picker-text">${skin ? skin.name : 'Choose Skin'}</span><span class="slot-picker-arrow">▼</span>
-                </button>
                 <div class="slot-dropdown-panel" id="slot-panel-${i}">
-                    <div class="slot-search-box"><input type="text" class="slot-search-input" id="slot-search-${i}" placeholder="Search..." onclick="event.stopPropagation()" oninput="filterSlotOptions(${i}, this.value)"></div>
-                    <div class="slot-options-scroll" id="slot-scroll-${i}">${optHtml}</div>
+                    <div class="slot-search-box"><input type="text" class="slot-search-input" id="slot-search-${i}" placeholder="Search skins..." onclick="event.stopPropagation()" oninput="populateSlotDropdown(${i}, this.value)"></div>
+                    <div class="slot-options-scroll" id="slot-scroll-${i}"></div>
                 </div>
-            </div>
-            <div class="slot-skin-coll">${skin && skin.collections[0] ? skin.collections[0].name : ''}</div>
-            <div class="slot-wear-bar-box">
-                <div class="slot-wear-bar"><div class="wear-seg-fn"></div><div class="wear-seg-mw"></div><div class="wear-seg-ft"></div><div class="wear-seg-ww"></div><div class="wear-seg-bs"></div></div>
-                <div class="slot-wear-marker" id="slot-marker-${i}" style="left: ${markerPercent}%;"></div>
-            </div>
-            <div class="slot-input-group">
-                <div class="slot-input-lbl"><span>Float</span><span id="slot-wear-lbl-${i}" style="color: var(--accent-cyan); font-weight: 800;">${wearName}</span></div>
-                <input type="number" step="0.0001" class="slot-input-field" value="${slot.float}" oninput="onSlotFloatChange(${i}, this.value)">
-            </div>
-            <div class="slot-input-group">
-                <div class="slot-input-lbl"><span>Price (${cur.symbol})</span></div>
-                <input type="number" step="0.01" class="slot-input-field" id="slot-price-${i}" placeholder="0.00" value="${priceDisp}" oninput="onSlotPriceChange(${i}, this.value)">
-            </div>
-        `;
+            `;
+        } else {
+            const wearName = getWearName(slot.float);
+            const markerPercent = Math.max(0, Math.min(100, slot.float * 100)).toFixed(1);
+            const priceDisp = slot.price !== null && !isNaN(slot.price) ? slot.price.toFixed(2) : "";
+            const hashName = getMarketHash(skin.name, wearName);
+            const canCraft = activeTier && allSkins.some(s => s && s.rarity && s.rarity.name === activeTier && getSafeCollectionName(s) === getSafeCollectionName(skin));
+            
+            card.innerHTML = `
+                <div class="slot-card-header">
+                    <div style="display: flex; align-items: center; gap: 6px;"><span class="slot-num-badge">SLOT #${i + 1}</span>
+                        <a href="${getSteamMarketUrl(hashName)}" id="slot-steam-${i}" target="_blank" class="slot-steam-link">Steam ↗</a>${canCraft ? `<a href="#target=${encodeURIComponent(skin.name)}&wearMax=${slot.float}" id="slot-tradeup-${i}" target="_blank" class="slot-slot-craft-link">Trade-Up ↗</a>` : ''}
+                    </div>
+                    ${selectedTarget ? `<span class="badge ${isTargetColl ? 'badge-best' : 'badge-secondary'}">${isTargetColl ? 'Primary' : 'Filler'}</span>` : ''}
+                </div>
+                <div class="slot-thumb-box" style="background: radial-gradient(circle at 50% 60%, ${rarityHex}38 0%, rgba(13, 17, 26, 0.96) 82%); border-bottom: 2px solid ${rarityHex};">
+                    <img class="slot-thumb" src="${skin.image || ''}" onerror="this.style.display='none'">
+                </div>
+                <div class="slot-picker-wrap">
+                    <button type="button" class="slot-picker-btn" id="slot-btn-${i}" onclick="toggleSlotDropdown(${i}, event)">
+                        <span class="slot-picker-text">${skin.name}</span><span class="slot-picker-arrow">▼</span>
+                    </button>
+                    <div class="slot-dropdown-panel" id="slot-panel-${i}">
+                        <div class="slot-search-box"><input type="text" class="slot-search-input" id="slot-search-${i}" placeholder="Search..." onclick="event.stopPropagation()" oninput="populateSlotDropdown(${i}, this.value)"></div>
+                        <div class="slot-options-scroll" id="slot-scroll-${i}"></div>
+                    </div>
+                </div>
+                <div class="slot-skin-coll">${getSafeCollectionName(skin)}</div>
+                <div class="slot-wear-bar-box">
+                    <div class="slot-wear-bar"><div class="wear-seg-fn"></div><div class="wear-seg-mw"></div><div class="wear-seg-ft"></div><div class="wear-seg-ww"></div><div class="wear-seg-bs"></div></div>
+                    <div class="slot-wear-marker" id="slot-marker-${i}" style="left: ${markerPercent}%;"></div>
+                </div>
+                <div class="slot-input-group">
+                    <div class="slot-input-lbl"><span>Float</span><span id="slot-wear-lbl-${i}" style="color: var(--accent-cyan); font-weight: 800;">${wearName}</span></div>
+                    <input type="number" step="0.0001" class="slot-input-field" value="${slot.float}" oninput="onSlotFloatChange(${i}, this.value)">
+                </div>
+                <div class="slot-input-group">
+                    <div class="slot-input-lbl"><span>Price (${cur.symbol})</span></div>
+                    <input type="number" step="0.01" class="slot-input-field" id="slot-price-${i}" placeholder="0.00" value="${priceDisp}" oninput="onSlotPriceChange(${i}, this.value)">
+                </div>
+            `;
+        }
         container.appendChild(card);
     });
 }
 
 function closeAllSlotDropdowns() { 
     document.querySelectorAll(".slot-dropdown-panel").forEach(p => p.classList.remove("open")); 
-    document.querySelectorAll(".slot-picker-btn").forEach(b => b.classList.remove("active")); 
+    document.querySelectorAll(".slot-picker-btn, .empty-slot-btn").forEach(b => b.classList.remove("active")); 
     activeSlotDropdown = null; 
 }
 
@@ -635,55 +880,247 @@ function toggleSlotDropdown(idx, e) {
         p.classList.add("open"); 
         document.getElementById(`slot-btn-${idx}`).classList.add("active"); 
         activeSlotDropdown = idx; 
+        populateSlotDropdown(idx, ''); // Auto-populate on open
     } 
 }
 
-function filterSlotOptions(idx, q) { 
-    const s = document.getElementById(`slot-scroll-${idx}`); 
-    if(!s) return; 
-    const items = s.querySelectorAll(".slot-opt-item"); 
-    items.forEach(i => { i.style.display = (!q || i.getAttribute("data-name").toLowerCase().includes(q.toLowerCase())) ? "flex" : "none"; }); 
-}
-
-function selectSlotSkin(idx, name) { 
-    closeAllSlotDropdowns(); 
-    onIndividualSlotSkinChange(idx, decodeURIComponent(name)); 
+function populateSlotDropdown(idx, query) {
+    const scrollEl = document.getElementById(`slot-scroll-${idx}`);
+    if (!scrollEl) return;
+    
+    const cur = getActiveCurrency();
+    const cleanQuery = (query || "").trim().toLowerCase();
+    const tokens = cleanQuery.replace(/\bdeagle\b/g, "desert eagle").split(/\s+/).filter(Boolean);
+    
+    let allowedTier = null;
+    if (selectedTarget) {
+        allowedTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(selectedTarget)) - 1];
+    } else if (sandboxTier) {
+        allowedTier = sandboxTier;
+    }
+    
+    let matches = allSkins.filter(s => {
+        if (allowedTier && (!s.rarity || s.rarity.name !== allowedTier)) return false;
+        if (getSafeCollectionName(s) === "Standard Drop") return false;
+        if (s.min_float === null || s.max_float === null) return false;
+        if (isStatTrak && !s.stattrak) return false;
+        if (tokens.length > 0 && !tokens.every(t => s.name.toLowerCase().includes(t))) return false;
+        return true;
+    });
+    
+    const tColl = selectedTarget ? getSafeCollectionName(selectedTarget) : null;
+    if (tColl) {
+        matches.sort((a, b) => {
+            const aMatch = getSafeCollectionName(a) === tColl;
+            const bMatch = getSafeCollectionName(b) === tColl;
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return 0;
+        });
+    }
+    
+    matches = matches.slice(0, 50); // Performance cap
+    let html = "";
+    
+    matches.forEach(s => {
+        let p = getBasePrice(s, slots[idx].float);
+        let pDisp = p ? formatMoney(p * cur.rate) : 'N/A';
+        html += `<div class="slot-opt-item" onclick="onIndividualSlotSkinChange(${idx}, '${encodeURIComponent(s.name)}')">
+            <div style="display:flex; justify-content:space-between; width:100%;">
+                <span class="slot-opt-name">${s.name} <span style="color:var(--text-muted); font-size:9px;">(${getSafeCollectionName(s)})</span></span>
+                <span style="color:var(--accent-green); font-size:10px; font-weight:800;">${pDisp}</span>
+            </div>
+        </div>`;
+    });
+    
+    if (matches.length === 0) html = `<div style="padding: 10px; color: var(--text-muted); font-size: 11px; text-align: center;">No valid skins found.</div>`;
+    scrollEl.innerHTML = html;
 }
 
 function onIndividualSlotSkinChange(idx, name) {
-    const s = allSkins.find(x => x.name === name); if(!s) return;
+    const s = allSkins.find(x => x.name === decodeURIComponent(name)); if(!s) return;
+    
+    if (!selectedTarget && !sandboxTier) sandboxTier = s.rarity.name; // Sandbox Tier Lock
+    
     const targetNorm = getNormalizedTarget(); 
+    let dFloat = targetNorm;
+    
+    if (selectedTarget) {
+        dFloat = ((targetNorm * ((s.max_float ?? 1) - (s.min_float ?? 0))) + (s.min_float ?? 0));
+    } else {
+        let minL = parseFloat(document.getElementById("wearMinInput").value) || 0.15;
+        let maxL = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
+        dFloat = minL + (targetNorm * (maxL - minL)); // Approximate inside wear bar for sandbox
+    }
+    
     slots[idx].skin = s;
-    slots[idx].float = parseFloat(((targetNorm * ((s.max_float ?? 1) - (s.min_float ?? 0))) + (s.min_float ?? 0)).toFixed(4));
+    slots[idx].float = parseFloat(dFloat.toFixed(4));
     
     const wear = getWearName(slots[idx].float);
     slots[idx].price = priceCache[getMarketHash(s.name, wear)] ? parseFloat((priceCache[getMarketHash(s.name, wear)] * getActiveCurrency().rate).toFixed(2)) : null;
     
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); 
-    if (tIdx > 0) { renderSlotCards(TIER_ORDER[tIdx - 1]); computeAndRenderOutcomes(TIER_ORDER[tIdx - 1]); }
-    
+    closeAllSlotDropdowns();
     updatePresetButtons(); 
-    updateUrlHash();
+    runCalculation();
 }
 
 function onPrimarySkinDropdownChange(idx) { selectEligiblePrimary(idx); }
 
 function onFillerSkinDropdownChange(name) {
     secondarySkin = allSkins.find(s => s.name === name);
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); if (tIdx <= 0) return;
-    const inputTier = TIER_ORDER[tIdx - 1], targetNorm = getNormalizedTarget();
+    if (!selectedTarget) return;
+    const inputTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(selectedTarget)) - 1], targetNorm = getNormalizedTarget();
     
     slots.forEach(slot => {
-        if (slot.skin && slot.skin.collections[0].name !== selectedTarget.collections[0].name) {
+        if (slot.skin && getSafeCollectionName(slot.skin) !== getSafeCollectionName(selectedTarget)) {
             slot.skin = secondarySkin;
             slot.float = parseFloat(((targetNorm * ((secondarySkin.max_float ?? 1) - (secondarySkin.min_float ?? 0))) + (secondarySkin.min_float ?? 0)).toFixed(4));
             slot.price = priceCache[getMarketHash(secondarySkin.name, getWearName(slot.float))] ? parseFloat((priceCache[getMarketHash(secondarySkin.name, getWearName(slot.float))] * getActiveCurrency().rate).toFixed(2)) : null;
         }
     });
     
-    renderSlotCards(inputTier); 
-    computeAndRenderOutcomes(inputTier); 
-    updateUrlHash();
+    runCalculation(); 
+}
+
+function applySplitPreset(primaryCount) {
+    if (!selectedTarget) return;
+    const inputTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(selectedTarget)) - 1]; 
+    ensureFillerSkinExists(inputTier);
+    const targetNormalized = getNormalizedTarget();
+    const pSkin = targetCollInputs[selectedPrimaryIndex];
+    const cur = getActiveCurrency();
+    const pMin = pSkin ? (pSkin.min_float ?? 0) : 0, pMax = pSkin ? (pSkin.max_float ?? 1) : 1;
+    const sMin = secondarySkin ? (secondarySkin.min_float ?? 0) : 0, sMax = secondarySkin ? (secondarySkin.max_float ?? 1) : 1;
+    const pFloat = parseFloat(((targetNormalized * (pMax - pMin)) + pMin).toFixed(4));
+    const sFloat = parseFloat(((targetNormalized * (sMax - sMin)) + sMin).toFixed(4));
+
+    for (let i = 0; i < 10; i++) {
+        let skin = i < primaryCount ? pSkin : secondarySkin;
+        let flt = i < primaryCount ? pFloat : sFloat;
+        slots[i] = { skin: skin, float: flt, price: null };
+        if (skin) {
+            let hash = getMarketHash(skin.name, getWearName(flt));
+            slots[i].price = priceCache[hash] ? parseFloat((priceCache[hash] * cur.rate).toFixed(2)) : null;
+        }
+    }
+    updatePresetButtons(); runCalculation(); 
+}
+
+function applyMultiCheapestFiller() {
+    if (!selectedTarget) return alert("Please select a target skin first to use auto-fillers.");
+    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); if (tIdx <= 0) return;
+    const inputTier = TIER_ORDER[tIdx - 1], tColl = getSafeCollectionName(selectedTarget), cur = getActiveCurrency(), targetNorm = getNormalizedTarget();
+    
+    const cFillers = allSkins.filter(s => s && s.rarity && s.rarity.name === inputTier && getSafeCollectionName(s) !== "Standard Drop" && getSafeCollectionName(s) !== tColl && s.min_float !== null && s.max_float !== null);
+    if (cFillers.length === 0) return alert("No valid fillers found.");
+
+    const pricedFillers = [];
+    cFillers.forEach(s => {
+        let minF = s.min_float ?? 0, maxF = s.max_float ?? 1, dFloat = minF + (maxF - minF) * targetNorm;
+        let priceUSD = priceCache[getMarketHash(s.name, getWearName(dFloat))];
+        if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD)) pricedFillers.push({ skin: s, priceUSD, dFloat });
+    });
+    pricedFillers.sort((a, b) => a.priceUSD - b.priceUSD);
+    
+    const topFillers = [], seen = new Set();
+    for (const item of pricedFillers) { if (!seen.has(item.skin.name)) { seen.add(item.skin.name); topFillers.push(item); if (topFillers.length >= 4) break; } }
+    if (topFillers.length === 0) return alert("No priced fillers available.");
+    
+    let pCount = slots.filter(s => s.skin && getSafeCollectionName(s.skin) === tColl).length;
+    if (pCount >= 10 || pCount === 0) pCount = 1; // Strict Primary Lock Force
+    
+    const pSkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
+    if (!pSkin) return alert("No primary skins available for this target.");
+    
+    const pMin = pSkin.min_float ?? 0, pMax = pSkin.max_float ?? 1;
+    const pFloat = parseFloat(((targetNorm * (pMax - pMin)) + pMin).toFixed(4));
+    const pPriceUSD = priceCache[getMarketHash(pSkin.name, getWearName(pFloat))];
+    const pPriceLocal = pPriceUSD !== undefined && pPriceUSD !== null ? parseFloat((pPriceUSD * cur.rate).toFixed(2)) : null;
+
+    // Strict Primary Overwrite Lock
+    for (let i = 0; i < 10; i++) {
+        if (i < pCount) { 
+            slots[i] = { skin: pSkin, float: pFloat, price: pPriceLocal };
+        } else {
+            let fEntry = topFillers[(i - pCount) % topFillers.length];
+            let fMin = fEntry.skin.min_float ?? 0, fMax = fEntry.skin.max_float ?? 1;
+            let fFloat = parseFloat(((targetNorm * (fMax - fMin)) + fMin).toFixed(4));
+            let fPriceUSD = priceCache[getMarketHash(fEntry.skin.name, getWearName(fFloat))];
+            slots[i] = { skin: fEntry.skin, float: fFloat, price: fPriceUSD !== undefined && fPriceUSD !== null ? parseFloat((fPriceUSD * cur.rate).toFixed(2)) : null };
+        }
+    }
+    
+    secondarySkin = slots[pCount].skin; 
+    updatePresetButtons(); runCalculation(); 
+}
+
+function applyBudgetFiller() {
+    if (!selectedTarget) return alert("Please select a target skin first to use auto-fillers.");
+    const budgetInput = document.getElementById("budgetInput").value;
+    const budgetLimit = parseFloat(budgetInput);
+    if (isNaN(budgetLimit) || budgetLimit <= 0) return alert("Please enter a valid target budget.");
+
+    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); 
+    if (tIdx <= 0) return;
+    const inputTier = TIER_ORDER[tIdx - 1], tColl = getSafeCollectionName(selectedTarget), cur = getActiveCurrency(), targetNorm = getNormalizedTarget();
+    
+    let pCount = slots.filter(s => s.skin && getSafeCollectionName(s.skin) === tColl).length;
+    if (pCount >= 10 || pCount === 0) pCount = 1; // Strict Primary Lock Force
+    
+    const pSkin = targetCollInputs[selectedPrimaryIndex] || targetCollInputs[0];
+    if (!pSkin) return alert("No primary skins available for this target.");
+    
+    const pMin = pSkin.min_float ?? 0, pMax = pSkin.max_float ?? 1;
+    const pFloat = parseFloat(((targetNorm * (pMax - pMin)) + pMin).toFixed(4));
+    const pPriceUSD = priceCache[getMarketHash(pSkin.name, getWearName(pFloat))];
+    const pPriceLocal = pPriceUSD !== undefined ? pPriceUSD * cur.rate : 0;
+
+    const primaryTotalCost = pPriceLocal * pCount;
+    const remainingBudget = budgetLimit - primaryTotalCost;
+    const fillerCount = 10 - pCount;
+    
+    if (remainingBudget <= 0 && fillerCount > 0) {
+        return alert(`Your primary skins alone cost ${formatMoney(primaryTotalCost)}, exceeding or eating up the entire budget.`);
+    }
+
+    const maxPerFiller = fillerCount > 0 ? (remainingBudget / fillerCount) / cur.rate : 0;
+    
+    const cFillers = allSkins.filter(s => s && s.rarity && s.rarity.name === inputTier && getSafeCollectionName(s) !== "Standard Drop" && getSafeCollectionName(s) !== tColl && s.min_float !== null && s.max_float !== null);
+    if (cFillers.length === 0) return;
+
+    const pricedFillers = [];
+    cFillers.forEach(s => {
+        let minF = s.min_float ?? 0, maxF = s.max_float ?? 1, dFloat = minF + (maxF - minF) * targetNorm;
+        let priceUSD = priceCache[getMarketHash(s.name, getWearName(dFloat))];
+        if (priceUSD !== undefined && priceUSD !== null && !isNaN(priceUSD) && priceUSD <= maxPerFiller) {
+            pricedFillers.push({ skin: s, priceUSD, dFloat });
+        }
+    });
+    pricedFillers.sort((a, b) => b.priceUSD - a.priceUSD);
+    
+    const topFillers = [], seen = new Set();
+    for (const item of pricedFillers) { 
+        if (!seen.has(item.skin.name)) { seen.add(item.skin.name); topFillers.push(item); if (topFillers.length >= 4) break; } 
+    }
+    
+    if (topFillers.length === 0 && fillerCount > 0) {
+         return alert(`Could not find any fillers under the required budget of ${cur.symbol}${(maxPerFiller * cur.rate).toFixed(2)} each.`);
+    }
+    secondarySkin = topFillers.length > 0 ? topFillers[0].skin : null;
+
+    // Strict Primary Overwrite Lock
+    for (let i = 0; i < 10; i++) {
+        if (i < pCount) { 
+            slots[i] = { skin: pSkin, float: pFloat, price: pPriceLocal > 0 ? parseFloat(pPriceLocal.toFixed(2)) : null };
+        } else {
+            let fEntry = topFillers[(i - pCount) % topFillers.length];
+            let fMin = fEntry.skin.min_float ?? 0, fMax = fEntry.skin.max_float ?? 1;
+            let fFloat = parseFloat(((targetNorm * (fMax - fMin)) + fMin).toFixed(4));
+            let fPriceUSD = priceCache[getMarketHash(fEntry.skin.name, getWearName(fFloat))];
+            slots[i] = { skin: fEntry.skin, float: fFloat, price: fPriceUSD !== undefined && fPriceUSD !== null ? parseFloat((fPriceUSD * cur.rate).toFixed(2)) : null };
+        }
+    }
+    updatePresetButtons(); runCalculation(); 
 }
 
 function onSlotFloatChange(idx, val) {
@@ -706,33 +1143,64 @@ function onSlotFloatChange(idx, val) {
         const tradeupBtn = document.getElementById(`slot-tradeup-${idx}`);
         if (tradeupBtn) tradeupBtn.href = `#target=${encodeURIComponent(s.name)}&wearMax=${newFloat}`;
     }
-
-    const tIdx = TIER_ORDER.indexOf(targetRarity(selectedTarget)); 
-    if (tIdx > 0) computeAndRenderOutcomes(TIER_ORDER[tIdx - 1]); 
-    updateUrlHash();
+    runCalculation(); 
 }
 
-function onSlotPriceChange(idx, val) { 
+async function onSlotPriceChange(idx, val) { 
     slots[idx].price = val === "" ? null : parseFloat(val); 
+    
+    const skin = slots[idx].skin;
+    if (skin) {
+        const hash = getMarketHash(skin.name, getWearName(slots[idx].float));
+        priceCache[hash] = val === "" ? null : parseFloat(val) / getActiveCurrency().rate;
+        await dbPut('prices', 'master', priceCache); // Permanent save
+    }
+    
     updateFinancials(); 
     updateUrlHash(); 
 }
 
-function computeAndRenderOutcomes(inputTier) {
-    const targetTier = targetRarity(selectedTarget); if (!targetTier) return;
+function focusMissingPrice() {
+    const outcomesList = document.getElementById("outcomesList");
+    if(outcomesList) outcomesList.scrollIntoView({ behavior: "smooth", block: "center" });
+    
+    document.querySelectorAll(".val-input").forEach(input => {
+        if(!input.value || isNaN(parseFloat(input.value))) {
+            input.parentElement.classList.add("missing-pulse");
+            setTimeout(() => input.parentElement.classList.remove("missing-pulse"), 2500);
+            input.focus();
+        }
+    });
+}
+
+function computeAndRenderOutcomes() {
+    let targetTier = null;
+    if (selectedTarget) {
+        targetTier = targetRarity(selectedTarget);
+    } else if (sandboxTier) {
+        const tIdx = TIER_ORDER.indexOf(sandboxTier);
+        targetTier = TIER_ORDER[tIdx + 1];
+    }
+    if (!targetTier) return; 
+
     activeOutcomes = []; 
     let totalW = 0, totalR = 0, collCounts = {};
+    let collImages = {};
+    let filledSlots = slots.filter(s => s.skin);
     
-    slots.forEach(slot => {
-        if (!slot.skin) return;
+    filledSlots.forEach(slot => {
         let w = ((slot.skin.max_float ?? 1) !== (slot.skin.min_float ?? 0)) ? (slot.float - (slot.skin.min_float ?? 0)) / ((slot.skin.max_float ?? 1) - (slot.skin.min_float ?? 0)) : 0;
         totalW += w; 
         totalR += slot.float;
-        let cName = slot.skin.collections[0].name; 
-        collCounts[cName] = (collCounts[cName] || 0) + 1;
+        let cName = getSafeCollectionName(slot.skin); 
+        if (cName !== "Standard Drop") {
+            collCounts[cName] = (collCounts[cName] || 0) + 1;
+            if (!collImages[cName]) collImages[cName] = getContainerImage(slot.skin);
+        }
     });
     
-    const avgWeightedFloat = totalW / 10, avgRawFloat = totalR / 10;
+    const avgWeightedFloat = filledSlots.length > 0 ? totalW / filledSlots.length : 0;
+    const avgRawFloat = filledSlots.length > 0 ? totalR / filledSlots.length : 0;
     
     const avgFloatEl = document.getElementById("statAvgFloat");
     if (avgFloatEl) {
@@ -740,7 +1208,40 @@ function computeAndRenderOutcomes(inputTier) {
         avgFloatEl.dataset.avg = avgWeightedFloat.toString();
     }
 
-    document.getElementById("collectionsListText").innerHTML = Object.entries(collCounts).map(([c, count]) => `&bull; ${c} (x${count})`).join("<br>") || "None";
+    const curCode = document.getElementById("currencySelect") ? document.getElementById("currencySelect").value : "INR";
+    const originParam = selectedTarget ? `&originTarget=${encodeURIComponent(selectedTarget.name)}` : "";
+    
+    document.getElementById("collectionsListText").innerHTML = Object.entries(collCounts).map(([c, count]) => {
+        let nativeUrl = `collection.html?name=${encodeURIComponent(c)}&cur=${curCode}${originParam}`;
+        return `
+            <a href="${nativeUrl}" target="_blank" class="active-coll-pill" title="Inspect Collection">
+                <div class="coll-img-box"><img src="${collImages[c]}"></div>
+                <div class="active-coll-info">
+                    <span class="active-coll-name">${c}</span>
+                    <span class="active-coll-count">${count} Slot${count > 1 ? 's' : ''} (${((count/filledSlots.length)*100).toFixed(0)}%)</span>
+                </div>
+            </a>`;
+    }).join("") || "None";
+    
+    const validCollsMap = new Map();
+    allSkins.forEach(s => {
+        if (s && s.rarity && s.rarity.name === (sandboxTier || TIER_ORDER[TIER_ORDER.indexOf(targetRarity(selectedTarget))-1]) && getSafeCollectionName(s) !== "Standard Drop") {
+            if (!validCollsMap.has(getSafeCollectionName(s))) {
+                validCollsMap.set(getSafeCollectionName(s), getContainerImage(s));
+            }
+        }
+    });
+    
+    const validCollsArray = Array.from(validCollsMap.entries()).sort((a,b) => a[0].localeCompare(b[0]));
+    
+    document.getElementById("validCollectionsList").innerHTML = `<div class="valid-coll-grid">` + validCollsArray.map(([cName, img]) => {
+         let nativeUrl = `collection.html?name=${encodeURIComponent(cName)}&cur=${curCode}${originParam}`;
+         return `
+            <a href="${nativeUrl}" target="_blank" class="valid-coll-card" title="${cName}">
+                <div class="valid-coll-thumb"><img src="${img}"></div>
+                <span class="valid-coll-title">${cName}</span>
+            </a>`;
+    }).join("") + `</div>`;
     
     const avgMarker = document.getElementById("avgFloatMarker");
     if (avgMarker) {
@@ -751,8 +1252,8 @@ function computeAndRenderOutcomes(inputTier) {
     }
   
     Object.entries(collCounts).forEach(([c, count]) => {
-        const outs = allSkins.filter(s => s.collections && s.collections.some(x => x.name === c) && s.rarity && s.rarity.name === targetTier);
-        const p = (count / 10) / (outs.length || 1);
+        const outs = allSkins.filter(s => s && s.rarity && s.rarity.name === targetTier && getSafeCollectionName(s) === c);
+        const p = (count / filledSlots.length) / (outs.length || 1);
         outs.forEach(skin => activeOutcomes.push({ skin, probability: p, collection: c }));
     });
     
@@ -764,7 +1265,7 @@ function renderOutcomeCards(avgW) {
     container.innerHTML = "";
     
     const cur = getActiveCurrency();
-    const targetTier = targetRarity(selectedTarget);
+    const targetTier = selectedTarget ? targetRarity(selectedTarget) : TIER_ORDER[TIER_ORDER.indexOf(sandboxTier) + 1];
     const maxL = parseFloat(document.getElementById("wearMaxInput").value) || 0.38;
     const minL = parseFloat(document.getElementById("wearMinInput").value) || 0;
     const buf = parseFloat(document.getElementById("bufferSelect")?.value ?? "0.0005");
@@ -779,7 +1280,7 @@ function renderOutcomeCards(avgW) {
         let outWear = getWearName(outFloat);
         let hash = getMarketHash(entry.skin.name, outWear);
         
-        if (entry.skin.name === selectedTarget.name) targetOdds += entry.probability * 100;
+        if (selectedTarget && entry.skin.name === selectedTarget.name) targetOdds += entry.probability * 100;
         
         let priceUSD = priceCache[hash];
         let priceDisp = priceUSD !== undefined && priceUSD !== null ? (priceUSD * cur.rate) : 0;
@@ -796,13 +1297,14 @@ function renderOutcomeCards(avgW) {
     displayItems.forEach((item) => {
         const row = document.createElement("div"); 
         row.className = "item-row";
+        const isTarget = selectedTarget && item.entry.skin.name === selectedTarget.name;
         
         row.innerHTML = `
             <div class="item-left">
                 <div class="rarity-pill" style="background-color: ${color}"></div>
                 <img class="item-thumb" src="${item.entry.skin.image || ''}" onerror="this.style.display='none'">
                 <div class="item-details">
-                    <div class="item-name">${item.entry.skin.name} <span class="badge" style="color: ${color}; border: 1px solid ${color};">${targetTier}</span> ${item.entry.skin.name === selectedTarget.name ? '<span class="badge badge-best">Target</span>' : ''} ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}</div>
+                    <div class="item-name">${item.entry.skin.name} <span class="badge" style="color: ${color}; border: 1px solid ${color};">${targetTier}</span> ${isTarget ? '<span class="badge badge-best">Target</span>' : ''} ${isStatTrak ? '<span class="badge badge-st">StatTrak™</span>' : ''}</div>
                     <div class="item-source">${getSourceInfo(item.entry.skin)}</div>
                     <div class="item-subtext">Float: ${item.outFloat.toFixed(4)} &bull; <span class="condition-pill ${item.safe ? 'match' : item.risky ? 'risky' : 'miss'}">${item.risky ? item.outWear + ' (Risky)' : item.outWear}</span> &bull; Odds: <b>${item.odds.toFixed(1)}%</b></div>
                 </div>
@@ -810,29 +1312,32 @@ function renderOutcomeCards(avgW) {
             <div class="item-right">
                 <a href="${getCSFloatSearchUrl(item.hash)}" target="_blank" class="csfloat-link-btn" title="View listings on CSFloat">CSFloat ↗</a>
                 <a href="${getSteamMarketUrl(item.hash)}" target="_blank" class="market-link-btn" title="View floor price on Steam Market">Steam Market ↗</a>
-                <div class="price-input-group"><span class="currency-symbol">${cur.symbol}</span><input type="number" step="0.01" class="val-input" id="outcome-price-${item.originalIdx}" placeholder="N/A" value="${item.priceDisp}" oninput="onOutcomePriceChange(${item.originalIdx}, this.value)"></div>
+                <div class="price-input-group"><span class="currency-symbol">${cur.symbol}</span><input type="number" step="0.01" min="0" class="val-input" id="outcome-price-${item.originalIdx}" placeholder="N/A" value="${item.priceDisp}" oninput="onOutcomePriceChange(${item.originalIdx}, this.value)"></div>
                 <span id="outcome-pnl-${item.originalIdx}" class="pnl-badge">N/A</span>
             </div>
         `;
         container.appendChild(row);
     });
     
-    document.getElementById("statOdds").textContent = `${targetOdds.toFixed(1)}%`;
+    document.getElementById("statOdds").textContent = selectedTarget ? `${targetOdds.toFixed(1)}%` : "N/A (Sandbox)";
     
-    // FIXED: Trigger the math function immediately after redrawing the sorted rows to fill the N/A badges
     updateFinancials();
 }
 
-function onOutcomePriceChange(idx, val) {
+async function onOutcomePriceChange(idx, val) {
     let totalW = 0;
-    slots.forEach(slot => { 
+    let filledSlots = slots.filter(s => s.skin);
+    filledSlots.forEach(slot => { 
         totalW += ((slot.skin?.max_float ?? 1) !== (slot.skin?.min_float ?? 0)) ? (slot.float - (slot.skin?.min_float ?? 0)) / ((slot.skin?.max_float ?? 1) - (slot.skin?.min_float ?? 0)) : 0; 
     });
-    let avgW = totalW / 10;
+    let avgW = filledSlots.length > 0 ? totalW / filledSlots.length : 0;
     let entry = activeOutcomes[idx];
     let outFloat = (avgW * ((entry.skin.max_float ?? 1) - (entry.skin.min_float ?? 0))) + (entry.skin.min_float ?? 0);
     
-    priceCache[getMarketHash(entry.skin.name, getWearName(outFloat))] = val === "" ? null : parseFloat(val) / getActiveCurrency().rate;
+    const hash = getMarketHash(entry.skin.name, getWearName(outFloat));
+    priceCache[hash] = val === "" ? null : parseFloat(val) / getActiveCurrency().rate;
+    await dbPut('prices', 'master', priceCache); // Permanent save
+    
     updateFinancials();
 }
 
@@ -841,8 +1346,8 @@ function updateFinancials() {
     
     let totalCost = 0, missing = false; 
     slots.forEach((s) => { 
-        if (s.price === null || isNaN(s.price)) missing = true; 
-        else totalCost += s.price; 
+        if (s.skin && (s.price === null || isNaN(s.price))) missing = true; 
+        else if (s.skin) totalCost += s.price; 
     });
     
     currentTotalInputCost = totalCost;
@@ -862,7 +1367,7 @@ function updateFinancials() {
 
     slots.forEach((s, i) => { 
         let inputField = document.getElementById(`slot-price-${i}`);
-        if (inputField) {
+        if (inputField && s.skin) {
             if (s.price === null || isNaN(s.price)) {
                 inputField.style.borderColor = "var(--accent-red)";
                 inputField.title = "Price missing";
@@ -906,8 +1411,19 @@ function updateFinancials() {
         pEl.textContent = "N/A"; pEl.className = "stat-value"; 
         rEl.textContent = "N/A"; rEl.className = "stat-value"; 
         wEl.textContent = "N/A"; wEl.className = "stat-value"; 
-        vEl.textContent = missing ? "N/A (Input Price Empty)" : "N/A (Missing Prices)"; vEl.className = "stat-value"; 
-        bEl.textContent = "N/A"; wrEl.textContent = "N/A"; 
+        
+        let targetEntry = activeOutcomes.find(o => selectedTarget && o.skin.name === selectedTarget.name);
+        if(targetEntry && totalCost > 0) {
+            let bePrice = totalCost / (targetEntry.probability * fee);
+            bEl.innerHTML = `<span style="font-size: 10px; color: var(--text-muted); display: block; line-height: 1;">Target Break-Even</span>${formatMoney(bePrice)}`;
+            bEl.className = "stat-value gold";
+        } else {
+            bEl.textContent = "N/A";
+        }
+        wrEl.textContent = "N/A"; 
+        
+        vEl.innerHTML = `<button class="action-btn" style="color: var(--accent-gold); border-color: var(--accent-gold); width: 100%; height: 24px; font-size: 10px;" onclick="focusMissingPrice()">⚠️️ Enter Missing Price</button>`;
+        vEl.className = "stat-value";
         
         stickyProfitEl.textContent = "N/A";
         stickyProfitEl.style.color = "var(--text-main)";
@@ -932,173 +1448,17 @@ function updateFinancials() {
     stickyProfitEl.style.color = netProfit >= 0 ? "var(--accent-green)" : "var(--accent-red)";
 }
 
-// ============================================================================
-// 5. SEARCH LOGIC & URL ROUTING
-// ============================================================================
-function handleSearch(query) {
-    const dropdown = document.getElementById("dropdownResults");
-    const cleanQuery = (query || "").trim().toLowerCase();
-    
-    if (!cleanQuery) { dropdown.style.display = "none"; dropdown.innerHTML = ""; return; }
-    if (!validTargetSkins || validTargetSkins.length === 0) {
-        dropdown.innerHTML = `<div class="dropdown-item" style="color: var(--accent-gold); cursor: default;">Loading database...</div>`;
-        dropdown.style.display = "block"; return;
-    }
-    
-    let normalizedQuery = cleanQuery.replace(/\bdeagle\b/g, "desert eagle");
-    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-    const matches = validTargetSkins.filter(skin => tokens.every(token => skin.name.toLowerCase().includes(token))).slice(0, 25);
-  
-    if (matches.length === 0) {
-        dropdown.innerHTML = `<div class="dropdown-item" style="color: var(--text-muted); cursor: default;">No matching skin found.</div>`;
-        dropdown.style.display = "block"; return;
-    }
-    
-    dropdown.innerHTML = "";
-    matches.forEach(skin => {
-        const item = document.createElement("div");
-        item.className = "dropdown-item";
-        const collName = skin.collections[0]?.name || "Standard Collection";
-        const color = RARITY_COLORS[skin.rarity.name] || "var(--accent-cyan)";
-        
-        item.innerHTML = `
-            <div class="dropdown-left">
-                <div class="dropdown-pill" style="background-color: ${color}"></div>
-                <img class="dropdown-thumb" src="${skin.image || ''}" onerror="this.style.display='none'">
-                <div class="dropdown-info">
-                    <div class="dropdown-name">${skin.name}</div>
-                    <div class="dropdown-coll">${collName} &bull; ${skin.rarity.name}</div>
-                </div>
-            </div>`;
-            
-        item.onclick = () => selectSkin(skin);
-        dropdown.appendChild(item);
-    });
-    dropdown.style.display = "block";
-}
-
-function selectSkin(skin) {
-    selectedTarget = skin;
-    document.getElementById("skinInput").value = skin.name;
-    document.getElementById("dropdownResults").style.display = "none";
-    const inputTier = TIER_ORDER[TIER_ORDER.indexOf(targetRarity(skin)) - 1];
-    targetCollInputs = allSkins.filter(s => s.collections && s.collections.some(c => c.name === skin.collections[0].name) && s.rarity && s.rarity.name === inputTier);
-    selectedPrimaryIndex = 0; secondarySkin = null;
-    applySplitPreset(10); 
-    runCalculation();
-}
-
-function updateUrlHash() {
-    if (!selectedTarget) return;
-    const params = new URLSearchParams();
-    params.set("target", selectedTarget.name);
-    params.set("wearMin", document.getElementById("wearMinInput").value);
-    params.set("wearMax", document.getElementById("wearMaxInput").value);
-    params.set("buffer", document.getElementById("bufferSelect").value);
-    params.set("st", isStatTrak ? "1" : "0");
-    params.set("fee", document.getElementById("feeSelect").value);
-    params.set("cur", document.getElementById("currencySelect").value);
-    history.replaceState(null, "", `#${params.toString()}`);
-}
-
-function checkUrlHashLoad() {
-    const hash = window.location.hash.substring(1);
-    if (!hash) return;
-    const params = new URLSearchParams(hash);
-    const targetName = params.get("target");
-    if (!targetName) return;
-    
-    const match = validTargetSkins.find(s => s.name.toLowerCase() === targetName.toLowerCase());
-    if (!match) return;
-  
-    if (params.get("st") === "1") { isStatTrak = true; document.getElementById("stToggle").classList.add("active"); }
-    const wearMaxParam = params.get("wearMax") || params.get("wear");
-    
-    if (wearMaxParam) {
-        const maxVal = parseFloat(wearMaxParam);
-        document.getElementById("wearMaxInput").value = maxVal.toFixed(4);
-        if (params.get("wearMin")) document.getElementById("wearMinInput").value = parseFloat(params.get("wearMin")).toFixed(4);
-        let minVal = parseFloat(document.getElementById("wearMinInput").value);
-        let matched = "CUSTOM";
-        for (const [key, range] of Object.entries(WEAR_RANGES)) {
-            if (Math.abs(minVal - range.min) < 0.0005 && Math.abs(maxVal - range.max) < 0.0005) { matched = key; break; }
-        }
-        document.getElementById("exteriorSelect").value = matched; 
-        updateWearPointers();
-    }
-    
-    if (params.get("buffer")) document.getElementById("bufferSelect").value = params.get("buffer");
-    if (params.get("fee")) document.getElementById("feeSelect").value = params.get("fee");
-    if (params.get("cur")) document.getElementById("currencySelect").value = params.get("cur");
-
-    selectedTarget = match;
-    document.getElementById("skinInput").value = match.name;
-    targetCollInputs = allSkins.filter(s => s.collections && s.collections.some(c => c.name === match.collections[0].name) && s.rarity && s.rarity.name === TIER_ORDER[TIER_ORDER.indexOf(targetRarity(match)) - 1]);
-    selectedPrimaryIndex = 0; 
-    applySplitPreset(10); 
-    runCalculation();
-}
-
-// ============================================================================
-// 6. RECIPE BINDER LOGIC
-// ============================================================================
-function copyShareUrl() {
-    updateUrlHash(); 
-    navigator.clipboard.writeText(window.location.href).then(() => {
-        const el = document.getElementById("shareBtnText"); 
-        el.textContent = "✔ Copied!"; 
-        setTimeout(() => { el.textContent = "🔗 Link"; }, 2000);
-    });
-}
-
-function toggleBinder() {
-    const panel = document.getElementById("binderPanel"), overlay = document.getElementById("binderOverlay");
-    if (panel.classList.contains("open")) { panel.classList.remove("open"); overlay.style.display = "none"; }
-    else { renderBinderList(); panel.classList.add("open"); overlay.style.display = "block"; }
-}
-
-function saveCurrentRecipe() {
-    if (!selectedTarget) return; 
-    updateUrlHash();
-    const currentHash = window.location.hash; if (!currentHash) return;
-    const saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]");
-    const existingIdx = saved.findIndex(r => r.hash === currentHash);
-    if (existingIdx !== -1) saved.splice(existingIdx, 1);
-    
-    saved.unshift({ 
-        id: Date.now(), 
-        name: selectedTarget.name, 
-        wear: getWearName((parseFloat(document.getElementById("wearMaxInput").value) || 0.38) - 0.0001), 
-        st: isStatTrak, 
-        hash: currentHash, 
-        date: new Date().toLocaleDateString() 
-    });
-    
-    localStorage.setItem("CS2_SAVED_RECIPES", JSON.stringify(saved));
-    const btn = document.getElementById("saveBinderText"); 
-    btn.textContent = "✔ Saved!"; 
-    setTimeout(() => { btn.textContent = "⭐ Save"; }, 2000);
-}
-
-function renderBinderList() {
-    const container = document.getElementById("binderContent"), saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]");
-    if (saved.length === 0) { container.innerHTML = `<div class="binder-empty">No saved recipes found.<br><br>Click ⭐ Save.</div>`; return; }
-    container.innerHTML = "";
-    saved.forEach(r => {
-        const card = document.createElement("div"); card.className = "saved-card";
-        card.innerHTML = `<div class="saved-card-title">${r.st ? 'StatTrak™ ' : ''}${r.name}</div><div class="saved-card-date">Target Wear: ${r.wear} &bull; Saved: ${r.date}</div><div class="saved-card-actions"><div class="saved-btn-load" onclick="loadSavedRecipe('${r.hash}')">Load Setup</div><button class="saved-btn-del" onclick="deleteSavedRecipe(${r.id})" title="Delete">🗑</button></div>`;
-        container.appendChild(card);
-    });
-}
-
-function loadSavedRecipe(hash) { toggleBinder(); history.replaceState(null, "", hash); checkUrlHashLoad(); }
-function deleteSavedRecipe(id) { let saved = JSON.parse(localStorage.getItem("CS2_SAVED_RECIPES") || "[]"); localStorage.setItem("CS2_SAVED_RECIPES", JSON.stringify(saved.filter(r => r.id !== id))); renderBinderList(); }
-
 // GLOBAL CLICKS
 document.addEventListener("click", e => {
     const searchWrapper = document.querySelector(".search-wrapper");
     if (searchWrapper && !searchWrapper.contains(e.target)) { const drop = document.getElementById("dropdownResults"); if (drop) drop.style.display = "none"; }
     if (!e.target.closest(".slot-picker-wrap")) closeAllSlotDropdowns();
+    
+    const validFillersBtn = document.querySelector(".collection-action-btn");
+    const validFillersList = document.getElementById("validCollectionsList");
+    if (validFillersList && validFillersBtn && !validFillersList.contains(e.target) && !validFillersBtn.contains(e.target)) {
+        closeValidCollections();
+    }
 });
 
 // ============================================================================
@@ -1197,10 +1557,11 @@ async function executeSimulation() {
     const feeMultiplier = parseFloat(document.getElementById("feeSelect").value);
     const cur = getActiveCurrency();
     let totalW = 0;
-    slots.forEach(slot => { 
+    let filledSlots = slots.filter(s => s.skin);
+    filledSlots.forEach(slot => { 
         totalW += ((slot.skin?.max_float ?? 1) !== (slot.skin?.min_float ?? 0)) ? (slot.float - (slot.skin?.min_float ?? 0)) / ((slot.skin?.max_float ?? 1) - (slot.skin?.min_float ?? 0)) : 0; 
     });
-    const avgW = totalW / 10;
+    const avgW = filledSlots.length > 0 ? totalW / filledSlots.length : 0;
 
     for (let i = 0; i < times; i++) {
         let roll = Math.random(), cumulative = 0, wonEntry = activeOutcomes[activeOutcomes.length - 1]; 
@@ -1233,7 +1594,7 @@ async function executeSimulation() {
         
         img.src = wonEntry.skin.image || '';
         name.textContent = (isStatTrak ? 'StatTrak™ ' : '') + wonEntry.skin.name;
-        collEl.textContent = wonEntry.skin.collections[0]?.name || '';
+        collEl.textContent = getSafeCollectionName(wonEntry.skin);
         
         wearNameEl.textContent = outWear;
         floatValEl.textContent = outFloat.toFixed(4);
@@ -1247,12 +1608,20 @@ async function executeSimulation() {
 
         simStats.runs++; simStats.invested += currentTotalInputCost; if (netProfit >= 0) simStats.wins++; else simStats.losses++; simStats.profit += netProfit;
     }
-    await delay(700); document.getElementById("simTitle").textContent = "Contract Executed"; renderPostDashboard();
+    
+    let lifetime = await dbGet('sim_history', 'lifetime') || { runs: 0, wins: 0, losses: 0, profit: 0, invested: 0 };
+    lifetime.runs += simStats.runs; lifetime.wins += simStats.wins; lifetime.losses += simStats.losses; lifetime.profit += simStats.profit; lifetime.invested += simStats.invested;
+    await dbPut('sim_history', 'lifetime', lifetime);
+    
+    await delay(700); document.getElementById("simTitle").textContent = "Contract Executed"; await renderPostDashboard(lifetime);
 }
 
-function renderPostDashboard() {
+async function renderPostDashboard(lifetime) {
     const dashContainer = document.getElementById("simPostDashboard");
     let winRate = ((simStats.wins / simStats.runs) * 100).toFixed(1), totalPnlSign = simStats.profit >= 0 ? '+' : '', totalPnlClass = simStats.profit >= 0 ? 'green' : 'red';
+    let lifeWinRate = lifetime.runs > 0 ? ((lifetime.wins / lifetime.runs) * 100).toFixed(1) : "0.0";
+    let lifePnlSign = lifetime.profit >= 0 ? '+' : '', lifePnlClass = lifetime.profit >= 0 ? 'green' : 'red';
+
     let groupedMap = {}; activeOutcomes.forEach(e => { if (!groupedMap[e.skin.name]) groupedMap[e.skin.name] = { skin: e.skin, prob: 0 }; groupedMap[e.skin.name].prob += e.probability; });
     let groupedOutcomes = Object.values(groupedMap).sort((a,b) => b.prob - a.prob);
 
@@ -1279,20 +1648,94 @@ function renderPostDashboard() {
             </div>
         </div>
 
-        <div class="sim-stats-container" style="opacity: 1;">
-            <div class="sim-stat-row">
-                <div class="sim-stat-box"><span class="sim-stat-lbl">Runs</span><span class="sim-stat-val">${simStats.runs}</span></div>
-                <div class="sim-stat-box"><span class="sim-stat-lbl">Wins</span><span class="sim-stat-val green">${simStats.wins}</span></div>
-                <div class="sim-stat-box"><span class="sim-stat-lbl">Losses</span><span class="sim-stat-val red">${simStats.losses}</span></div>
-                <div class="sim-stat-box"><span class="sim-stat-lbl">Win %</span><span class="sim-stat-val gold">${winRate}%</span></div>
-                <div class="sim-stat-box"><span class="sim-stat-lbl">Input Cost</span><span class="sim-stat-val">${formatMoney(currentTotalInputCost)}</span></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px;">
+            <div class="sim-stats-container" style="opacity: 1; margin-top: 0;">
+                <div style="font-size: 9px; text-transform: uppercase; font-weight: 800; color: var(--accent-cyan); text-align: center; margin-bottom: 4px;">Current Session</div>
+                <div class="sim-stat-row">
+                    <div class="sim-stat-box"><span class="sim-stat-lbl">Runs</span><span class="sim-stat-val">${simStats.runs}</span></div>
+                    <div class="sim-stat-box"><span class="sim-stat-lbl">Win %</span><span class="sim-stat-val gold">${winRate}%</span></div>
+                </div>
+                <div class="sim-stat-row">
+                    <div class="sim-stat-box" style="flex: 1;"><span class="sim-stat-lbl">Session P/L</span><span class="sim-stat-val large ${totalPnlClass}">${totalPnlSign}${formatMoney(simStats.profit)}</span></div>
+                </div>
             </div>
-            <div class="sim-stat-row">
-                <div class="sim-stat-box" style="flex: 1;"><span class="sim-stat-lbl">Total Invested</span><span class="sim-stat-val large">${formatMoney(simStats.invested)}</span></div>
-                <div class="sim-stat-box" style="flex: 1;"><span class="sim-stat-lbl">Session Net P/L</span><span class="sim-stat-val large ${totalPnlClass}">${totalPnlSign}${formatMoney(simStats.profit)}</span></div>
+            <div class="sim-stats-container" style="opacity: 1; margin-top: 0; border-color: rgba(245, 158, 11, 0.2);">
+                <div style="font-size: 9px; text-transform: uppercase; font-weight: 800; color: var(--accent-gold); text-align: center; margin-bottom: 4px;">Lifetime Account</div>
+                <div class="sim-stat-row">
+                    <div class="sim-stat-box"><span class="sim-stat-lbl">Total Runs</span><span class="sim-stat-val">${lifetime.runs}</span></div>
+                    <div class="sim-stat-box"><span class="sim-stat-lbl">Win %</span><span class="sim-stat-val gold">${lifeWinRate}%</span></div>
+                </div>
+                <div class="sim-stat-row">
+                    <div class="sim-stat-box" style="flex: 1;"><span class="sim-stat-lbl">Lifetime P/L</span><span class="sim-stat-val large ${lifePnlClass}">${lifePnlSign}${formatMoney(lifetime.profit)}</span></div>
+                </div>
             </div>
         </div>
         ${outcomesGridHtml}
     `;
     dashContainer.style.display = "block";
+}
+
+// ============================================================================
+// 8. BINDER & SHARING
+// ============================================================================
+function copyShareUrl() {
+    updateUrlHash(); 
+    navigator.clipboard.writeText(window.location.href).then(() => {
+        const el = document.getElementById("shareBtnText"); 
+        el.textContent = "✔ Copied!"; 
+        setTimeout(() => { el.textContent = "🔗 Link"; }, 2000);
+    });
+}
+
+async function toggleBinder() {
+    const panel = document.getElementById("binderPanel"), overlay = document.getElementById("binderOverlay");
+    if (panel.classList.contains("open")) { 
+        panel.classList.remove("open"); overlay.style.display = "none"; 
+    } else { 
+        await renderBinderList(); 
+        panel.classList.add("open"); overlay.style.display = "block"; 
+    }
+}
+
+async function saveCurrentRecipe() {
+    if (!selectedTarget) return alert("Currently, only target-based reverse recipes can be saved to the binder."); 
+    updateUrlHash();
+    const currentHash = window.location.hash; if (!currentHash) return;
+    
+    let saved = await dbGet('recipes', 'saved_list') || [];
+    const existingIdx = saved.findIndex(r => r.hash === currentHash);
+    if (existingIdx !== -1) saved.splice(existingIdx, 1);
+    
+    saved.unshift({ 
+        id: Date.now(), 
+        name: selectedTarget.name, 
+        wear: getWearName((parseFloat(document.getElementById("wearMaxInput").value) || 0.38) - 0.0001), 
+        st: isStatTrak, 
+        hash: currentHash, 
+        date: new Date().toLocaleDateString() 
+    });
+    
+    await dbPut('recipes', 'saved_list', saved);
+    const btn = document.getElementById("saveBinderText"); 
+    btn.textContent = "✔ Saved!"; 
+    setTimeout(() => { btn.textContent = "⭐ Save"; }, 2000);
+}
+
+async function renderBinderList() {
+    const container = document.getElementById("binderContent");
+    const saved = await dbGet('recipes', 'saved_list') || [];
+    if (saved.length === 0) { container.innerHTML = `<div class="binder-empty">No saved recipes found.<br><br>Click ⭐ Save.</div>`; return; }
+    container.innerHTML = "";
+    saved.forEach(r => {
+        const card = document.createElement("div"); card.className = "saved-card";
+        card.innerHTML = `<div class="saved-card-title">${r.st ? 'StatTrak™ ' : ''}${r.name}</div><div class="saved-card-date">Target Wear: ${r.wear} &bull; Saved: ${r.date}</div><div class="saved-card-actions"><div class="saved-btn-load" onclick="loadSavedRecipe('${r.hash}')">Load Setup</div><button class="saved-btn-del" onclick="deleteSavedRecipe(${r.id})" title="Delete">🗑</button></div>`;
+        container.appendChild(card);
+    });
+}
+
+function loadSavedRecipe(hash) { toggleBinder(); history.replaceState(null, "", hash); checkUrlHashLoad(); }
+async function deleteSavedRecipe(id) { 
+    let saved = await dbGet('recipes', 'saved_list') || []; 
+    await dbPut('recipes', 'saved_list', saved.filter(r => r.id !== id)); 
+    renderBinderList(); 
 }

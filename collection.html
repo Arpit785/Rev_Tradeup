@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS2 Native Wiki Suite</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .collection-hero { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; margin-bottom: 20px; position: relative; overflow: hidden; }
+    .collection-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 70%); pointer-events: none; }
+    .hero-img-box { width: 140px; height: 100px; display: flex; align-items: center; justify-content: center; }
+    .hero-img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8)); }
+    .hero-title { font-size: 24px; font-weight: 800; color: #fff; }
+    .hero-subtitle { font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    
+    .toolbar-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-filter-input { flex: 1; min-width: 200px; max-width: 300px; height: 38px; }
+    .rarity-pills-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-pill { padding: 6px 12px; background: var(--bg-card-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-muted); font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+    .filter-pill:hover { border-color: var(--accent-cyan); color: #fff; }
+    .filter-pill.active { background: rgba(6, 182, 212, 0.2); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .sort-select { background: #090d14; border: 1px solid var(--border-color); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; outline: none; cursor: pointer; text-transform: uppercase; height: 30px; margin-left: auto; }
+
+    .skins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .skin-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s, border-color 0.2s; position: relative; }
+    .skin-card:hover { transform: translateY(-3px); border-color: rgba(6, 182, 212, 0.4); }
+    .skin-card-topbar { height: 4px; width: 100%; }
+    
+    .skin-card-body { padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 1; }
+    .skin-card-thumb-box { width: 100%; height: 110px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px; position: relative; border: 1px solid rgba(255,255,255,0.04); }
+    .skin-card-thumb { max-width: 100%; max-height: 95px; object-fit: contain; filter: drop-shadow(0 6px 12px rgba(0,0,0,0.7)); transition: transform 0.2s; }
+    .skin-card:hover .skin-card-thumb { transform: scale(1.06); }
+    
+    .skin-card-info { width: 100%; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+    .skin-card-name { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; justify-content: space-between; }
+    .skin-card-meta { font-size: 10px; color: var(--text-muted); font-family: monospace; display: flex; justify-content: space-between; }
+    .skin-card-price { font-size: 13px; font-weight: 800; color: var(--accent-green); font-family: monospace; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+    
+    .upgrade-path { font-size: 9px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-top: 6px; background: rgba(0,0,0,0.2); padding: 4px 6px; border-radius: 4px; border: 1px dashed var(--border-color); }
+    
+    .skin-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 14px; background: var(--bg-card-secondary); border-top: 1px solid var(--border-color); }
+    .skin-card-full-btn { grid-column: 1 / -1; }
+    .skin-card-filler-btn { grid-column: 1 / -1; background: rgba(16, 185, 129, 0.1); color: var(--accent-green); border-color: var(--accent-green); }
+    .skin-card-filler-btn:hover { background: var(--accent-green); color: #000; }
+
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+    .hub-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-decoration: none; transition: transform 0.2s, border-color 0.2s; text-align: center; }
+    .hub-card:hover { transform: translateY(-4px); border-color: var(--accent-cyan); background: var(--bg-card-secondary); }
+    .hub-thumb-box { width: 100px; height: 80px; display: flex; align-items: center; justify-content: center; }
+    .hub-thumb { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6)); }
+    .hub-title { font-size: 13px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .hub-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="header-content">
+      <div class="header-tag">NATIVE WIKI SUITE</div>
+      <div class="header-title">CS2 Database Explorer</div>
+    </div>
+    <div class="header-actions">
+      <select id="currencySelect" class="header-select" onchange="onCurrencyChange()" title="Select display currency">
+        <option value="INR" selected>INR (₹)</option>
+        <option value="USD">USD ($)</option>
+        <option value="EUR">EUR (€)</option>
+      </select>
+      <button class="home-btn" onclick="openAllCollections()">
+        <span>📚 All Collections</span>
+      </button>
+      <button class="home-btn" onclick="smartBack()">
+        <span>← Back</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="detailView" style="display: none;">
+    <div class="collection-hero" id="collectionHero">
+      <div class="hero-img-box"><img id="heroImg" class="hero-img" src="" alt="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%238492a6\'><path d=\'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\'/></svg>'"></div>
+      <div class="hero-subtitle">Collection Catalog</div>
+      <div class="hero-title" id="heroTitle">Loading Collection...</div>
+      <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;" id="heroCount">0 Items Available</div>
+    </div>
+
+    <div class="toolbar-row">
+      <input type="text" id="skinSearchInput" class="search-filter-input" placeholder="Search weapons in collection..." oninput="filterCollectionSkins()">
+      <div class="rarity-pills-row" id="rarityFilters">
+        <button class="filter-pill active" onclick="setRarityFilter('ALL', this)">All</button>
+        <button class="filter-pill" onclick="setRarityFilter('Covert', this)">Covert</button>
+        <button class="filter-pill" onclick="setRarityFilter('Classified', this)">Classified</button>
+        <button class="filter-pill" onclick="setRarityFilter('Restricted', this)">Restricted</button>
+        <button class="filter-pill" onclick="setRarityFilter('Mil-Spec Grade', this)">Mil-Spec</button>
+      </div>
+      <select id="priceSortSelect" class="sort-select" onchange="filterCollectionSkins()">
+        <option value="rarity" selected>Sort: Rarity</option>
+        <option value="price_asc">Price: Low to High</option>
+        <option value="price_desc">Price: High to Low</option>
+      </select>
+    </div>
+    <div class="skins-grid" id="collectionGrid"></div>
+  </div>
+
+  <div id="hubView" style="display: none;">
+    <div class="toolbar-row">
+      <input type="text" id="hubSearchInput" class="search-filter-input" placeholder="Search crates or collections..." oninput="renderHubGrid()">
+      <div class="rarity-pills-row" id="hubFilters">
+        <button class="filter-pill active" onclick="setHubFilter('ALL', this)">All</button>
+        <button class="filter-pill" onclick="setHubFilter('Collection', this)">Collections</button>
+        <button class="filter-pill" onclick="setHubFilter('Case', this)">Cases</button>
+        <button class="filter-pill" onclick="setHubFilter('Souvenir', this)">Souvenirs</button>
+      </div>
+    </div>
+    <div class="hub-grid" id="hubGrid"></div>
+  </div>
+
+</div>
+
+<script src="prices.js"></script>
+<script src="collection.js"></script>
+</body>
+</html>
