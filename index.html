@@ -161,8 +161,12 @@
       <div id="slotsGrid" class="slots-grid"></div>
     </div>
   </div>
-
+  
   <div id="resultSection" class="result-section" style="margin-top: 14px; display: none;">
+    
+    <!-- Relocated Simulator Button -->
+    <button class="sign-contract-btn" onclick="openSimulator()" style="margin-bottom: 10px;" data-html2canvas-ignore="true">✍️ SIGN CONTRACT (SIMULATE ROLL)</button>
+
     <div id="uncraftableNotice" class="notice-card" style="display: none;"></div>
 
     <div class="collection-breakdown-box">
@@ -238,8 +242,6 @@
         <div id="eligibleList" class="items-list"></div>
       </div>
     </div>
-
-    <button class="sign-contract-btn" onclick="openSimulator()" data-html2canvas-ignore="true">✍️ Sign Contract (Simulate Roll)</button>
 
     <div id="outcomesContainer">
       <div class="section-title" onclick="toggleSection('outcomesWrapper', 'chevOutcomes')">

@@ -1422,7 +1422,7 @@ function updateFinancials() {
         }
         wrEl.textContent = "N/A"; 
         
-        vEl.innerHTML = `<button class="action-btn" style="color: var(--accent-gold); border-color: var(--accent-gold); width: 100%; height: 24px; font-size: 10px;" onclick="focusMissingPrice()">⚠️️ Enter Missing Price</button>`;
+        vEl.innerHTML = `<button class="action-btn" style="color: var(--accent-gold); border-color: var(--accent-gold); width: 100%; height: 24px; font-size: 10px;" onclick="focusMissingPrice()">⚠ Enter Missing Price</button>`;
         vEl.className = "stat-value";
         
         stickyProfitEl.textContent = "N/A";
@@ -1659,7 +1659,8 @@ async function renderPostDashboard(lifetime) {
                     <div class="sim-stat-box" style="flex: 1;"><span class="sim-stat-lbl">Session P/L</span><span class="sim-stat-val large ${totalPnlClass}">${totalPnlSign}${formatMoney(simStats.profit)}</span></div>
                 </div>
             </div>
-            <div class="sim-stats-container" style="opacity: 1; margin-top: 0; border-color: rgba(245, 158, 11, 0.2);">
+            <div class="sim-stats-container" style="opacity: 1; margin-top: 0; border-color: rgba(245, 158, 11, 0.2); position: relative;">
+                <button onclick="resetLifetimeStats()" style="position: absolute; top: 8px; right: 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--accent-red); color: var(--accent-red); border-radius: 4px; padding: 3px 6px; font-size: 8px; font-weight: 800; cursor: pointer; text-transform: uppercase; transition: all 0.2s;">🗑 Clear</button>
                 <div style="font-size: 9px; text-transform: uppercase; font-weight: 800; color: var(--accent-gold); text-align: center; margin-bottom: 4px;">Lifetime Account</div>
                 <div class="sim-stat-row">
                     <div class="sim-stat-box"><span class="sim-stat-lbl">Total Runs</span><span class="sim-stat-val">${lifetime.runs}</span></div>
@@ -1738,4 +1739,13 @@ async function deleteSavedRecipe(id) {
     let saved = await dbGet('recipes', 'saved_list') || []; 
     await dbPut('recipes', 'saved_list', saved.filter(r => r.id !== id)); 
     renderBinderList(); 
+}
+
+// Function to permanently reset lifetime simulation data
+async function resetLifetimeStats() {
+    if (confirm("Are you sure you want to delete all your lifetime simulation data? This cannot be undone.")) {
+        await dbPut('sim_history', 'lifetime', { runs: 0, wins: 0, losses: 0, profit: 0, invested: 0 });
+        simStats = { runs: 0, wins: 0, losses: 0, profit: 0, invested: 0, hits: {} }; // Clear active session to prevent ghost math
+        closeSimulator();
+    }
 }
